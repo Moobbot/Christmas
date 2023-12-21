@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+    <title>Christmas Tree with Falling Snow</title>
+</head>
+<body>
+    <canvas id="christmasTreeCanvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById("christmasTreeCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const n = 100.0;
+
+        function drawRectangle(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
+        function drawTriangle(x, y, size, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + size, y);
+            ctx.lineTo(x + size / 2, y - size);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawLight(x, y, color) {
+            if (Math.random() < 0.033) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, 2 * Math.PI);
+                ctx.fill();
+            } else if (Math.random() < 0.033) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+
+        function drawChristmasTree() {
+            // Draw trunk
+            drawRectangle(canvas.width / 2 - 10, canvas.height - 150, 20, 100, "brown");
+
+            // Draw tree layers
+            for (let i = 0; i < 5; i++) {
+                const layerHeight = 150 / 5;
+                const layerWidth = 200 - i * (200 / 5);
+                drawTriangle(canvas.width / 2 - layerWidth / 2, canvas.height - 150 - i * layerHeight, layerWidth, "green");
+            }
+        }
+
+        function drawFallingSnow() {
+            const snowflakes = [];
+
+            function createSnowflake() {
+                return {
+                    x: Math.random() * canvas.width,
+                    y: 0,
+                    size: Math.random() * 5 + 1,
+                    speed: Math.random() * 2 + 1,
+                };
+            }
+
+            for (let i = 0; i < 200; i++) {
+                snowflakes.push(createSnowflake());
+            }
+
+            function drawFrame() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw falling snow
+                for (const snowflake of snowflakes) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath();
+                    ctx.arc(snowflake.x, snowflake.y, snowflake.size, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    // Update snowflake position for the next frame
+                    snowflake.y += snowflake.speed;
+
+                    // Reset snowflake to the top if it goes off the bottom
+                    if (snowflake.y > canvas.height) {
+                        snowflake.y = 0;
+                    }
+                }
+
+                // Draw Christmas tree
+                drawChristmasTree();
+
+                requestAnimationFrame(drawFrame);
+            }
+
+            // Start animation
+            drawFrame();
+        }
+        // Call the falling snow function
+        drawFallingSnow();
+    </script>
+</body>
+</html>
