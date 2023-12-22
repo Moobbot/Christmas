@@ -57,12 +57,11 @@
                 }
 
                 console.log(canvas.height, '---', y);
-                if (i > numStars) {
-                    die();
+                if (i < numStars) {
+                    drawStar(x, y, 8, 5, "#" + randomColor);
+                    i++;
+                    requestAnimationFrame(drawNextStar);
                 }
-                drawStar(x, y, 8, 5, "#" + randomColor);
-                i++;
-                requestAnimationFrame(drawNextStar);
             }
 
             drawNextStar();
@@ -139,7 +138,7 @@
         drawFallingSnow();
         setInterval(() => {
             drawSineWaveStars(canvas.width, 0.1, canvas.width / 2.5);
-        }, 100);
+        }, 10);
     </script>
 </body>
 
