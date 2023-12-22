@@ -4,27 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-        }
 
-        canvas {
-            display: block;
-        }
-    </style>
-    <title>Sine Wave Stars</title>
+    <title>Merry Christmas</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 
-<body style="background-color: rgb(21, 21, 21); width: 100vw; height: 100vh;">
-    <div class="" style="display: flex; justify-content: center; align-items: center;">
-        <canvas id="sineWaveStarsCanvas" width="800" height="700"></canvas>
+<body>
+    <h1 class="flicker" style="text-align: center;">Merry Christmas</h1>
+    <div class="d-center">
+        <canvas id="sineWaveStarsCanvas" width="800" height="800"></canvas>
     </div>
     <script>
         const canvas = document.getElementById("sineWaveStarsCanvas");
         const ctx = canvas.getContext("2d");
 
+        // Ngôi sao
         function drawStar(x, y, radius, spikes, color) {
             ctx.save();
             ctx.beginPath();
@@ -44,33 +38,108 @@
 
         function drawSineWaveStars(amplitude, frequency, numStars) {
             let currentAmplitude = 32;
-            var startX = canvas.width / 2; // Start x-coordinate at the center of the canvas
-            var startY = 38; // Start y-coordinate at the top
-            
-            for (let i = 0; i < numStars; i++) {
-                var randomColor = Math.floor(Math.random()*16777215).toString(16);
+            let startX = canvas.width / 2; // Start x-coordinate at the center of the canvas
+            let startY = 68; // Start y-coordinate at the top
+
+            let i = 0;
+
+            function drawNextStar() {
+                var randomColor = Math.floor(Math.random() * 16777215).toString(16);
                 if (currentAmplitude < amplitude) {
                     currentAmplitude += 1;
                 }
                 const x = startX + currentAmplitude * Math.sin(frequency * i * 2); // Adjust the spacing between stars
                 const y = startY + i * 2; // Adjust the spacing between stars
-                if (y < canvas.height - startY) {
-                    console.log(canvas.height, '---', y);
-                    drawStar(x, y, 8, 5, "#" + randomColor);
-                } else {
-                    break;
+                if (x < 0 || x > canvas.width || y >= canvas.height - startY) {
+                    // Reset animation when conditions are met
+                    i = 0;
+                    currentAmplitude = 32;
                 }
+
+                console.log(canvas.height, '---', y);
+                if (i > numStars) {
+                    die();
+                }
+                drawStar(x, y, 8, 5, "#" + randomColor);
+                i++;
+                requestAnimationFrame(drawNextStar);
             }
-        }
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw stars along a sine wave from the top center of the canvas to the bottom
-            drawSineWaveStars(canvas.width, 0.1, canvas.width /2.62);
-
-            requestAnimationFrame(animate);
+            drawNextStar();
         }
-        animate()
+
+        function drawFallingSnow() {
+            const snowflakes = [];
+            const stars = [];
+
+            function createSnowflake() {
+                return {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 3 + 1,
+                    speed: Math.random() * 2 + 1,
+                };
+            }
+
+            function createStar() {
+                return {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 3 + 1,
+                    spikes: 5,
+                    color: 'white',
+                    speed: Math.random() * 2 + 1,
+                };
+            }
+
+            for (let i = 0; i < 200; i++) {
+                snowflakes.push(createSnowflake());
+            }
+
+            for (let i = 0; i < 100; i++) {
+                stars.push(createStar());
+            }
+
+            function drawFrame() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                for (const snowflake of snowflakes) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath();
+                    ctx.arc(snowflake.x, snowflake.y, snowflake.size, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    snowflake.y += snowflake.speed;
+
+                    if (snowflake.y > canvas.height) {
+                        snowflake.y = 0;
+                    }
+                }
+
+                for (const star of stars) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.size, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    star.y += star.speed;
+
+                    if (star.y > canvas.height) {
+                        star.y = 0;
+                    }
+                    drawStar(star.x, star.y, star.radius, star.spikes, star.color);
+                }
+
+
+                requestAnimationFrame(drawFrame);
+            }
+
+            drawFrame();
+        }
+        drawFallingSnow();
+        setInterval(() => {
+            drawSineWaveStars(canvas.width, 0.1, canvas.width / 2.5);
+        }, 100);
     </script>
 </body>
 
