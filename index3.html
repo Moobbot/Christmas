@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,16 +9,92 @@
         body {
             margin: 0;
             overflow: hidden;
+            background-color: rgb(21, 21, 21);
+            width: 100vw;
+            height: 100vh;
+            position: relative;
         }
 
         canvas {
             display: block;
         }
     </style>
-</head>
-<body>
-    <canvas id="christmasTreeCanvas" width="800" height="600"></canvas>
+    <style type="text/css">
+        @-webkit-keyframes my {
+            0% {
+                color: #ffff00;
+            }
 
+            50% {
+                color: #fff;
+            }
+
+            100% {
+                color: #ffff00;
+            }
+        }
+
+        @-moz-keyframes my {
+            0% {
+                color: #ffff00;
+            }
+
+            50% {
+                color: #fff;
+            }
+
+            100% {
+                color: #ffff00;
+            }
+        }
+
+        @-o-keyframes my {
+            0% {
+                color: #ffff00;
+            }
+
+            50% {
+                color: #fff;
+            }
+
+            100% {
+                color: #ffff00;
+            }
+        }
+
+        @keyframes my {
+            0% {
+                color: #ffff00;
+            }
+
+            50% {
+                color: #fff;
+            }
+
+            100% {
+                color: #ffff00;
+            }
+        }
+
+        .flicker {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, 0);
+            font-size: 50px;
+            -webkit-animation: my 700ms infinite;
+            -moz-animation: my 700ms infinite;
+            -o-animation: my 700ms infinite;
+            animation: my 700ms infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 class="flicker" style="text-align: center;">Merry Christmas</h1>
+    <div class="" style="display: flex; justify-content: center; align-items: center;">
+        <canvas id="christmasTreeCanvas" width="1000" height="800"></canvas>
+    </div>
     <script>
         const canvas = document.getElementById("christmasTreeCanvas");
         const ctx = canvas.getContext("2d");
@@ -105,4 +182,5 @@
         drawFallingSnow();
     </script>
 </body>
+
 </html>
