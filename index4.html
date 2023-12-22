@@ -19,7 +19,7 @@
 
 <body style="background-color: rgb(21, 21, 21); width: 100vw; height: 100vh;">
     <div class="" style="display: flex; justify-content: center; align-items: center;">
-        <canvas id="sineWaveStarsCanvas" width="800" height="700"></canvas>
+        <canvas id="sineWaveStarsCanvas" width="800" height="1000"></canvas>
     </div>
     <script>
         const canvas = document.getElementById("sineWaveStarsCanvas");
@@ -44,33 +44,27 @@
 
         function drawSineWaveStars(amplitude, frequency, numStars) {
             let currentAmplitude = 32;
-            var startX = canvas.width / 2; // Start x-coordinate at the center of the canvas
-            var startY = 38; // Start y-coordinate at the top
-            
-            for (let i = 0; i < numStars; i++) {
-                var randomColor = Math.floor(Math.random()*16777215).toString(16);
-                if (currentAmplitude < amplitude) {
-                    currentAmplitude += 1;
-                }
-                const x = startX + currentAmplitude * Math.sin(frequency * i * 2); // Adjust the spacing between stars
-                const y = startY + i * 2; // Adjust the spacing between stars
-                if (y < canvas.height - startY) {
-                    console.log(canvas.height, '---', y);
-                    drawStar(x, y, 8, 5, "#" + randomColor);
-                } else {
-                    break;
-                }
-            }
-        }
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const startX = canvas.width / 2; // Start x-coordinate at the center of the canvas
+            const startY = 8; // Start y-coordinate at the top
 
-            // Draw stars along a sine wave from the top center of the canvas to the bottom
-            drawSineWaveStars(canvas.width, 0.1, canvas.width /2.62);
+            return function animateStars() {
+                if (currentAmplitude >= numStars) {
+                    return; // Stop animation when all stars are drawn
+                }
 
-            requestAnimationFrame(animate);
+                var randomColor = Math.floor(Math.random() * 16777215).toString(16);
+                const x = startX + currentAmplitude * Math.sin(frequency * currentAmplitude * 2);
+                const y = startY + currentAmplitude * 2;
+                drawStar(x, y, 8, 5, "#" + randomColor);
+
+                currentAmplitude += 1;
+
+                requestAnimationFrame(animateStars);
+            };
         }
-        animate()
+
+        const animate = drawSineWaveStars(canvas.width, 0.1, canvas.width /2.4);
+        animate();
     </script>
 </body>
 
