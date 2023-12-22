@@ -101,6 +101,24 @@
 
         const n = 100.0;
 
+        // Ngôi sao
+        function drawStar(x, y, radius, spikes, color) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.translate(x, y);
+            ctx.moveTo(0, 0 - radius);
+            for (let i = 0; i < spikes; i++) {
+                ctx.rotate(Math.PI / spikes);
+                ctx.lineTo(0, 0 - radius * 0.5);
+                ctx.rotate(Math.PI / spikes);
+                ctx.lineTo(0, 0 - radius);
+            }
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+        }
+
         function drawlight(x, y) {
             const randomNum = Math.random();
             if (randomNum < 0.033) {
@@ -118,8 +136,18 @@
             }
         }
 
+        function drawRectangle(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
         function tree(x, y, d, s) {
             if (d <= 0) return;
+
+            // Draw trunk
+            const trunkHeight = canvas.height;
+            const trunkWidth = 5; // Adjusted trunk width to 5 pixels
+            drawRectangle(canvas.width / 2 - trunkWidth / 2, canvas.height / 2 - 100, trunkWidth, trunkHeight, 'brown');
 
             ctx.beginPath();
             ctx.moveTo(x, y);
@@ -141,18 +169,34 @@
 
         function drawFallingSnow() {
             const snowflakes = [];
+            const stars = [];
 
             function createSnowflake() {
                 return {
                     x: Math.random() * canvas.width,
-                    y: 0,
+                    y: Math.random() * canvas.height,
                     size: Math.random() * 5 + 1,
+                    speed: Math.random() * 2 + 1,
+                };
+            }
+
+            function createStar() {
+                return {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 3 + 1,
+                    spikes: 5,
+                    color: 'white',
                     speed: Math.random() * 2 + 1,
                 };
             }
 
             for (let i = 0; i < 200; i++) {
                 snowflakes.push(createSnowflake());
+            }
+
+            for (let i = 0; i < 100; i++) {
+                stars.push(createStar());
             }
 
             function drawFrame() {
@@ -171,6 +215,20 @@
                     }
                 }
 
+                for (const star of stars) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.size, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    star.y += star.speed;
+
+                    if (star.y > canvas.height) {
+                        star.y = 0;
+                    }
+                    drawStar(star.x, star.y, star.radius, star.spikes, star.color);
+                }
+
                 tree(canvas.width / 2, canvas.height - 150, 15, n);
 
                 requestAnimationFrame(drawFrame);
@@ -180,6 +238,7 @@
         }
 
         drawFallingSnow();
+
     </script>
 </body>
 

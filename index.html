@@ -14,137 +14,40 @@
             display: block;
         }
     </style>
-    <title>Christmas Tree</title>
+    <title>Christmas Star</title>
 </head>
 
 <body style="background-color: rgb(21, 21, 21); width: 100vw; height: 100vh;">
     <div class="" style="display: flex; justify-content: center; align-items: center;">
-        <canvas id="christmasTreeCanvas" width="1000" height="800"></canvas>
+        <canvas id="christmasStarCanvas" width="600" height="600"></canvas>
     </div>
     <script>
-        const canvas = document.getElementById("christmasTreeCanvas");
+        const canvas = document.getElementById("christmasStarCanvas");
         const ctx = canvas.getContext("2d");
 
-        const n = 100.0;
-
-        function drawRectangle(x, y, width, height, color) {
-            ctx.fillStyle = color;
-            ctx.fillRect(x, y, width, height);
-        }
-
-        function drawTriangle(x, y, size, color) {
-            ctx.fillStyle = color;
+        function drawStar(x, y, radius, spikes, color) {
+            ctx.save();
             ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + size, y);
-            ctx.lineTo(x + size / 2, y - size);
+            ctx.translate(x, y);
+            ctx.moveTo(0, 0 - radius);
+            for (let i = 0; i < spikes; i++) {
+                ctx.rotate((Math.PI / spikes) * 2);
+                ctx.lineTo(0, 0 - radius * 0.5);
+                ctx.rotate((Math.PI / spikes) * 2);
+                ctx.lineTo(0, 0 - radius);
+            }
             ctx.closePath();
+            ctx.fillStyle = color;
             ctx.fill();
-        }
-
-        function drawLight(x, y, color) {
-            if (Math.random() < 0.066) {
-                ctx.fillStyle = color;
-                ctx.beginPath();
-                ctx.arc(x, y, 6, 0, 2 * Math.PI);
-                ctx.fill();
-            } else if (Math.random() < 0.066) {
-                ctx.fillStyle = color;
-                ctx.beginPath();
-                ctx.arc(x, y, 3, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-        }
-
-        function drawChristmasTree() {
-            // Draw trunk
-            drawRectangle(canvas.width / 2 - 10, canvas.height - 150, 20, 100, "brown");
-
-            // Draw tree layers
-            for (let i = 0; i < 5; i++) {
-                const layerHeight = 150 / 5;
-                const layerWidth = 200 - i * (200 / 5);
-                drawTriangle(canvas.width / 2 - layerWidth / 2, canvas.height - 150 + i * layerHeight, layerWidth, "green");
-            }
-        }
-
-        function drawTree(d, s) {
-            if (d <= 0) return;
-            ctx.beginPath();
-            ctx.moveTo(canvas.width / 2, canvas.height - 150);
-            ctx.lineTo(canvas.width / 2, canvas.height - 150 - s);
-            ctx.strokeStyle = "dark green";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            drawTree(d - 1, s * 0.8);
-
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height - 150 - s);
-            ctx.rotate((Math.PI / 180) * 120);
-            drawTree(d - 3, s * 0.5);
-            drawLight(0, 0, "tomato");
-            ctx.restore();
-
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height - 150 - s);
-            ctx.rotate((Math.PI / 180) * -120);
-            drawTree(d - 3, s * 0.5);
-            drawLight(0, 0, "tomato");
             ctx.restore();
         }
 
-        function drawFallingSnow() {
-            const snowflakes = [];
+        // Get the center coordinates of the canvas
+        const centerX = canvas.width / 2;
+        const centerY = 50; // Distance from the top
 
-            function createSnowflake() {
-                return {
-                    x: Math.random() * canvas.width,
-                    y: 0,
-                    size: Math.random() * 5 + 1,
-                    speed: Math.random() * 2 + 1,
-                };
-            }
-
-            for (let i = 0; i < 200; i++) {
-                snowflakes.push(createSnowflake());
-            }
-
-            function drawFrame() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Draw Christmas tree
-                drawChristmasTree();
-
-                for (const snowflake of snowflakes) {
-                    ctx.fillStyle = "white";
-                    ctx.beginPath();
-                    ctx.arc(snowflake.x, snowflake.y, snowflake.size, 0, 2 * Math.PI);
-                    ctx.fill();
-
-                    // Update snowflake position for the next frame
-                    snowflake.y += snowflake.speed;
-
-                    // Reset snowflake to the top if it goes off the bottom
-                    if (snowflake.y > canvas.height) {
-                        snowflake.y = 0;
-                    }
-                }
-
-                // Draw tree with lights
-                drawTree(15, n);
-
-                requestAnimationFrame(drawFrame);
-            }
-
-            // Start animation
-            drawFrame();
-        }
-
-        // Call the falling snow function
-        drawFallingSnow();
-
-
+        // Draw the star at the top center of the canvas
+        drawStar(centerX, centerY, 20, 5, 'yellow');
     </script>
 </body>
 
