@@ -14,15 +14,15 @@
             display: block;
         }
     </style>
-    <title>Christmas Star</title>
+    <title>Christmas Star Binary Tree</title>
 </head>
 
 <body style="background-color: rgb(21, 21, 21); width: 100vw; height: 100vh;">
     <div class="" style="display: flex; justify-content: center; align-items: center;">
-        <canvas id="christmasStarCanvas" width="600" height="600"></canvas>
+        <canvas id="christmasTreeCanvas" width="800" height="1000"></canvas>
     </div>
     <script>
-        const canvas = document.getElementById("christmasStarCanvas");
+        const canvas = document.getElementById("christmasTreeCanvas");
         const ctx = canvas.getContext("2d");
 
         function drawStar(x, y, radius, spikes, color) {
@@ -42,12 +42,39 @@
             ctx.restore();
         }
 
+        function drawBinaryTree(x, y, level, maxLevels, horizontalSpacing) {
+            if (level > maxLevels) {
+                return;
+            }
+
+            // Draw a star at the current vertex
+            drawStar(x, y, 10, 5, 'yellow');
+
+            // Calculate the positions of child vertices
+            const leftX = x - horizontalSpacing;
+            const rightX = x + horizontalSpacing;
+            const childY = y + 40;
+
+            // Draw edges to child vertices
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.moveTo(x, y);
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+
+            // Check if spacing condition is met
+            if (horizontalSpacing >= 5) {
+                // Recursively draw the left and right subtrees
+                drawBinaryTree(leftX, childY, level + 1, maxLevels, horizontalSpacing);
+                drawBinaryTree(rightX, childY, level + 1, maxLevels, horizontalSpacing);
+            }
+        }
         // Get the center coordinates of the canvas
         const centerX = canvas.width / 2;
         const centerY = 50; // Distance from the top
 
-        // Draw the star at the top center of the canvas
-        drawStar(centerX, centerY, 20, 5, 'yellow');
+        // Draw the binary tree with stars
+        drawBinaryTree(centerX, centerY, 1, 8, 60);
     </script>
 </body>
 
