@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Christmas Tree with Lights</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Khởi tạo cảnh, camera và renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Tạo hình nón cho phần thân cây
+        const geometry = new THREE.ConeGeometry(5, 20, 32);
+        const material = new THREE.MeshPhongMaterial({ color: 0x006400 });
+        const tree = new THREE.Mesh(geometry, material);
+        scene.add(tree);
+
+        // Thêm ánh sáng
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+        pointLight.position.set(10, 10, 10);
+        scene.add(pointLight);
+
+        // Tạo các đèn LED trên cây
+        const ledGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const ledMaterials = [
+            new THREE.MeshBasicMaterial({ color: 0xff0000 }),
+            new THREE.MeshBasicMaterial({ color: 0x00ff00 }),
+            new THREE.MeshBasicMaterial({ color: 0x0000ff }),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+        ];
+
+        const leds = [];
+        for (let i = 0; i < 50; i++) {
+            const ledMaterial = ledMaterials[Math.floor(Math.random() * ledMaterials.length)];
+            const led = new THREE.Mesh(ledGeometry, ledMaterial);
+            const theta = Math.random() * 2 * Math.PI;
+            const y = Math.random() * 20 - 10;
+            const radius = 5 - (y + 10) / 4;
+            led.position.set(radius * Math.cos(theta), y, radius * Math.sin(theta));
+            leds.push(led);
+            scene.add(led);
+        }
+
+        camera.position.z = 30;
+
+        // Hàm animate để render cảnh
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Quay cây thông
+            tree.rotation.y += 0.01;
+
+            // Nhấp nháy đèn LED
+            leds.forEach((led, index) => {
+                led.material.emissive = new THREE.Color(led.material.color);
+                led.material.emissiveIntensity = 0.5 + 0.5 * Math.sin(Date.now() * 0.005 + index);
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Đảm bảo canvas điều chỉnh kích thước khi thay đổi kích thước cửa sổ
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

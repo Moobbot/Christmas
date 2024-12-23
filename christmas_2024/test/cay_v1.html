@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Star Tree</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: radial-gradient(circle, #000, #000000);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Khởi tạo cảnh, camera và renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Tạo ngôi sao hình sao
+        const starShape = new THREE.Shape();
+        starShape.moveTo(0, 1);
+        for (let i = 1; i <= 10; i++) {
+            const angle = (i * Math.PI) / 5;
+            const radius = i % 2 === 0 ? 0.5 : 1;
+            starShape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+
+        const extrudeSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 2, steps: 2, bevelSize: 0.1, bevelThickness: 0.1 };
+        const starGeometry = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+
+        // Tạo vật liệu với gradient sáng bóng
+        const starMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 0.8,
+            roughness: 0.3,
+            emissive: 0x0099ff,
+            emissiveIntensity: 0.5
+        });
+
+        const stars = [];
+        const layers = 15; // Tăng số lớp để tăng chiều cao
+        const starsPerLayer = 20;
+
+        for (let layer = 0; layer < layers; layer++) {
+            const radius = 10 - layer * 0.6; // Giảm bán kính mỗi lớp để giữ hình dạng cây
+            const y = layer * 2; // Giữ chiều cao của mỗi lớp
+            for (let i = 0; i < starsPerLayer; i++) {
+                const angle = (i / starsPerLayer) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const star = new THREE.Mesh(starGeometry, starMaterial);
+                star.position.set(x, y, z);
+                stars.push(star);
+                scene.add(star);
+            }
+        }
+
+        // Thêm ánh sáng
+        const ambientLight = new THREE.AmbientLight(0x404040); // Ánh sáng môi trường
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100); // Ánh sáng điểm mạnh hơn
+        pointLight.position.set(0, 30, 30);
+        scene.add(pointLight);
+
+        camera.position.z = 40;
+
+        // Hàm animate để render cảnh
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Quay toàn bộ cây thông
+            scene.rotation.y += 0.01;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Đảm bảo canvas điều chỉnh kích thước khi thay đổi kích thước cửa sổ
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

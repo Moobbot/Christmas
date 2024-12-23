@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Star Tree</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            background: radial-gradient(circle, #000, #000000);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+
+<body>
+    <div class="snowflakes" aria-hidden="true">
+        <div class="snowflake" style="font-size: 30px;">❅</div>
+        <div class="snowflake">❅</div>
+        <div class="snowflake" style="font-size: 40px;">❆ </div>
+        <div class="snowflake">❅</div>
+        <div class="snowflake" style="font-size: 30px;">❆</div>
+        <div class="snowflake" style="font-size: 22px;">❅</div>
+        <div class="snowflake" style="font-size: 50px;">❆</div>
+        <div class="snowflake" style="font-size: 20px;">❅</div>
+        <div class="snowflake" style="font-size: 70px;">❆</div>
+        <div class="snowflake" style="font-size: 20px;">❆</div>
+    </div>
+    <script>
+        // Tạo scene, camera, và renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Tạo hình dạng ngôi sao
+        const starShape = new THREE.Shape();
+        const outerRadius = 1;
+        const innerRadius = 0.5;
+        const spikes = 5;
+
+        for (let i = 0; i < spikes * 2; i++) {
+            const angle = (i / (spikes * 2)) * Math.PI * 2;
+            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+
+            if (i === 0) {
+                starShape.moveTo(x, y);
+            } else {
+                starShape.lineTo(x, y);
+            }
+        }
+        starShape.closePath();
+
+        const extrudeSettings = { depth: 0.5, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1 };
+        const geometry = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+        const materialYellow = new THREE.MeshPhongMaterial({ color: 0xffff00, shininess: 100 });
+        const materialGreen = new THREE.MeshPhongMaterial({ color: 0x007700, shininess: 100 });
+
+        // Tạo ngôi sao trên cùng
+        const layers = 15;
+        const topStar = new THREE.Mesh(geometry, materialYellow);
+        topStar.scale.set(3, 3, 3);
+        topStar.position.set(0.2, layers * 2 + 3, 0.2);
+        scene.add(topStar);
+
+        // Tạo nhóm các ngôi sao dưới cây thông
+        const starsGroup = new THREE.Group();
+        const starsPerLayer = 40;
+
+        for (let layer = 0; layer < layers; layer++) {
+            const radius = 10 - layer * 0.6;
+            const y = layer * 2;
+            for (let i = 0; i < starsPerLayer; i++) {
+                const angle = (i / starsPerLayer) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const star = new THREE.Mesh(geometry, materialGreen.clone());
+                star.scale.set(0.6, 0.6, 0.6);
+                star.position.set(x, y, z);
+                starsGroup.add(star);
+            }
+        }
+        scene.add(starsGroup);
+
+        // Tạo vòng sao lấp đầy hình nón bên trong cây thông
+        const spiralStarsGroup = new THREE.Group();
+        const spiralStars = 1500; // Tăng số lượng sao lấp đầy hình nón
+        for (let i = 0; i < spiralStars; i++) {
+            const progress = Math.random(); // Tiến trình ngẫu nhiên từ 0 đến 1
+            const angle = Math.random() * Math.PI * 2; // Góc ngẫu nhiên quanh trục y
+            const radius = (1 - progress) * 8; // Bán kính giảm dần khi lên cao
+            const y = progress * layers * 2; // Chiều cao ngẫu nhiên từ gốc đến đỉnh
+            const x = radius * Math.cos(angle);
+            const z = radius * Math.sin(angle);
+
+            const randomColor = Math.floor(Math.random() * 0xffffff); // Chọn màu ngẫu nhiên
+            const starMaterial = new THREE.MeshPhongMaterial({ color: randomColor });
+            const star = new THREE.Mesh(geometry, starMaterial);
+            star.scale.set(0.6, 0.6, 0.6);
+            star.position.set(x, y, z);
+            spiralStarsGroup.add(star);
+        }
+        scene.add(spiralStarsGroup);
+
+        for (let layer = 0; layer < layers; layer++) {
+            const radius = 7 - layer * 0.4;
+            const y = layer * 2;
+            for (let i = 0; i < starsPerLayer; i++) {
+                const randomTilt = (Math.random() - 0.5) * 0.5; // Nghiêng ngẫu nhiên xung quanh trục
+                const randomTwist = (Math.random() - 0.5) * Math.PI * 2; // Xoay ngẫu nhiên xung quanh tâm
+                const angle = (i / starsPerLayer) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const star = new THREE.Mesh(geometry, materialGreen.clone());
+                star.rotation.set(randomTilt, randomTwist, randomTilt);
+                star.scale.set(0.5, 0.5, 0.5);
+                star.position.set(x, y, z);
+                starsGroup.add(star);
+            }
+        }
+        scene.add(starsGroup);
+
+        // Tạo quả cầu trang trí ngẫu nhiên
+        const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+        const redMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        const silverMaterial = new THREE.MeshPhongMaterial({ color: 0xc0c0c0 });
+        const ornamentsGroup = new THREE.Group();
+
+        for (let i = 0; i < 200; i++) {
+            const randomLayer = Math.random() * layers;
+            const randomRadius = 10 - randomLayer * 0.6 + Math.random();
+            const randomAngle = Math.random() * Math.PI * 2;
+            const x = randomRadius * Math.cos(randomAngle);
+            const y = randomLayer * 2;
+            const z = randomRadius * Math.sin(randomAngle);
+
+            const ornamentMaterial = Math.random() > 0.5 ? redMaterial : silverMaterial;
+            const ornament = new THREE.Mesh(sphereGeometry, ornamentMaterial);
+            ornament.position.set(x, y, z);
+            ornamentsGroup.add(ornament);
+        }
+        scene.add(ornamentsGroup);
+        // Tạo hiệu ứng tuyết rơi
+        const snowGroup = new THREE.Group();
+        const snowCount = 1000;
+
+        const snowGeometry = new THREE.SphereGeometry(0.1, 9, 9);
+        const snowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+        for (let i = 0; i < snowCount; i++) {
+            const snowflake = new THREE.Mesh(snowGeometry, snowMaterial);
+            snowflake.position.set(
+                (Math.random() - 0.4) * 90,
+                Math.random() * 50,
+                (Math.random() - 0.4) * 90
+            );
+            snowflake.velocityY = Math.random() * 0.1 + 0.05; // Tốc độ rơi
+            snowGroup.add(snowflake);
+        }
+        scene.add(snowGroup);
+        // Thêm ánh sáng
+        const ambientLight = new THREE.AmbientLight(0x404040); // Ánh sáng môi trường
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100); // Ánh sáng điểm mạnh hơn
+        pointLight.position.set(0, 30, 30);
+        scene.add(pointLight);
+
+        camera.position.set(0, layers, 40); // Điều chỉnh camera để hiển thị đỉnh cây rõ hơn
+
+        // Hàm animate để render cảnh
+        function animate() {
+            requestAnimationFrame(animate);
+            spiralStarsGroup
+            // Quay toàn bộ cây thông và các ngôi sao
+            spiralStarsGroup.rotation.y += 0.02; // Quay các ngôi sao bên trong
+            starsGroup.rotation.y += 0.01; // Quay các ngôi sao dưới cây quanh tâm
+            ornamentsGroup.rotation.y += 0.01; // Quay các quả cầu trang trí
+            topStar.rotation.y += 0.01; // Quay ngôi sao trên cùng
+
+            // Hiệu ứng tuyết rơi
+            snowGroup.children.forEach(snowflake => {
+                snowflake.position.y -= snowflake.velocityY;
+                if (snowflake.position.y < 0) {
+                    snowflake.position.y = 50; // Đặt lại vị trí tuyết rơi từ trên xuống
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Đảm bảo canvas điều chỉnh kích thước khi thay đổi kích thước cửa sổ
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>
