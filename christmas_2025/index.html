@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Christmas 2025 - Neon Heart</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #050510;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #ddd;
+            font-family: monospace;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            /* Removes bottom scrollbar ghost */
+        }
+
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px #000;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="debug">FPS: 60<br>Theme: purple</div>
+    <script>
+        // --- CONFIGURATION ---
+        // Width/Height will be overwritten by resize()
+        const CONFIG = {
+            WIDTH: 1080,
+            HEIGHT: 1920,
+            DURATION: 6.0,    // Time to draw heart in seconds
+            PARTICLES: 12000,
+            SEED: 42,
+            THEME: "purple",
+            TRAIL_WIDTH: 10,
+            FPS_UPDATE_INTERVAL: 500
+        };
+
+        const THEMES = {
+            purple: {
+                primary: "255, 0, 255",   // Magenta
+                secondary: "128, 0, 255", // Purple
+                trail: "#ff00ff"
+            },
+            orange: {
+                primary: "255, 165, 0",   // Orange
+                secondary: "255, 215, 0", // Gold
+                trail: "#ffa500"
+            },
+            green: {
+                primary: "0, 255, 127",   // Spring Green
+                secondary: "0, 255, 255", // Cyan
+                trail: "#00ff7f"
+            }
+        };
+
+        // --- SEEDED RANDOM ---
+        let seedState = CONFIG.SEED;
+        function random() {
+            // Simple LCG
+            seedState = (seedState * 1664525 + 1013904223) % 4294967296;
+            return seedState / 4294967296;
+        }
+
+        // --- STATE ---
+        let canvas, ctx;
+        let bufferCanvas, bufferCtx; // For trail & bloom
+        let particles = [];
+        let trailPoints = [];
+        let startTime = 0;
+        let lastTime = 0;
+        let isDrawing = false;
+        let animationId;
+        let lastFpsTime = 0;
+        let framesSinceLastFps = 0;
+
+        // --- INIT ---
+        function init() {
+            canvas = document.createElement('canvas');
+            document.body.appendChild(canvas);
+            ctx = canvas.getContext('2d');
+
+            // Buffer for the glowing trail
+            bufferCanvas = document.createElement('canvas');
+            bufferCtx = bufferCanvas.getContext('2d');
+
+            // Responsive sizing
+            window.addEventListener('resize', () => {
+                resize();
+                restart(); // Restart on resize to respawn particles within new bounds
+            });
+            resize(); // Initial resize
+
+            // Controls
+            window.addEventListener('keydown', handleInput);
+
+            // Note: restart() is called inside resize() so we don't need it here
+            requestAnimationFrame(loop);
+        }
+
+        function resize() {
+            // Full screen dimensions
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            bufferCanvas.width = window.innerWidth;
+            bufferCanvas.height = window.innerHeight;
+
+            // Update Config
+            CONFIG.WIDTH = window.innerWidth;
+            CONFIG.HEIGHT = window.innerHeight;
+        }
+
+        function handleInput(e) {
+            switch (e.key) {
+                case '1': changeTheme('purple'); break;
+                case '2': changeTheme('orange'); break;
+                case '3': changeTheme('green'); break;
+                case 'r': runRestart(); break;
+                case 'R': runRestart(); break;
+            }
+        }
+
+        function changeTheme(name) {
+            CONFIG.THEME = name;
+            updateDebug();
+        }
+
+        function runRestart() {
+            restart();
+        }
+
+        function updateDebug(fps = 60) {
+            document.getElementById('debug').innerHTML = `FPS: ${fps}<br>Theme: ${CONFIG.THEME}`;
+        }
+
+        function restart() {
+            seedState = CONFIG.SEED; // Reset seed
+            particles = [];
+            trailPoints = [];
+
+            // init particles
+            for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                particles.push({
+                    x: random() * CONFIG.WIDTH,
+                    y: random() * CONFIG.HEIGHT,
+                    vx: (random() - 0.5) * 0.5, // Slow drift
+                    vy: (random() - 0.5) * 0.5,
+                    size: random() * 2 + 0.5,
+                    alpha: random(),
+                    phase: random() * Math.PI * 2
+                });
+            }
+
+            // Clear buffer
+            bufferCtx.clearRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            startTime = performance.now();
+            isDrawing = true;
+        }
+
+        // --- MATH ---
+        function getHeartPoint(t) {
+            // Map t (0..1) to radians (0..2PI)
+            const rad = t * Math.PI * 2;
+
+            // User requested algorithm:
+            // x = a * sin^3(t)
+            // y = (13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)) / b
+
+            // Dynamic scale to fit screen
+            // Parametric bounds approx: x[-16, 16], y[-17, 5]
+            // Max dimension span is ~32 units.
+            // We want it to take up about 80% of the smaller screen dimension?
+            // span * scale = 0.8 * min(w, h)
+            // 32 * scale = 0.8 * min(w, h) => scale = min(w, h) / 40
+
+            const minDim = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT);
+            const scale = minDim / 40;
+
+            const a = 16;
+            const b = 1;
+
+            // Apply formula
+            // Note: We use Math.pow(Math.sin(rad), 3) for sin^3(t)
+            const xRaw = a * Math.pow(Math.sin(rad), 3);
+            const yRaw = (13 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad)) / b;
+
+            // Convert to canvas coordinates
+            // Negate Y because canvas Y-axis points down, while mathematical Y points up
+            const x = xRaw * scale;
+            const y = -yRaw * scale;
+
+            // Center it
+            const cx = CONFIG.WIDTH / 2;
+            const cy = CONFIG.HEIGHT / 2;
+
+            return {
+                x: cx + x,
+                y: cy + y
+            };
+        }
+
+        // --- LOOP ---
+        function loop(now) {
+            requestAnimationFrame(loop);
+
+            // Cap dt to prevent explosion on tab switch
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            // FPS Calc
+            if (now - lastFpsTime > CONFIG.FPS_UPDATE_INTERVAL) {
+                const fps = Math.round(framesSinceLastFps * 1000 / (now - lastFpsTime));
+                updateDebug(fps);
+                lastFpsTime = now;
+                framesSinceLastFps = 0;
+            }
+            framesSinceLastFps++;
+
+            // Animation Logic
+            const elapsed = (now - startTime) / 1000;
+            let progress = 0;
+            if (elapsed < CONFIG.DURATION) {
+                progress = elapsed / CONFIG.DURATION;
+                isDrawing = true;
+            } else {
+                progress = 1;
+                isDrawing = false;
+            }
+
+            const head = getHeartPoint(progress);
+
+            // Add head to trail
+            if (isDrawing) {
+                // Only add if moved enough
+                if (trailPoints.length === 0) {
+                    trailPoints.push(head);
+                } else {
+                    const last = trailPoints[trailPoints.length - 1];
+                    const dist = Math.hypot(head.x - last.x, head.y - last.y);
+                    if (dist > 5) {
+                        trailPoints.push(head);
+                        // Draw segment to buffer immediately to persistent trail
+                        bufferCtx.strokeStyle = THEMES[CONFIG.THEME].trail;
+                        bufferCtx.lineWidth = CONFIG.TRAIL_WIDTH;
+                        bufferCtx.lineCap = 'round';
+                        bufferCtx.lineJoin = 'round';
+                        bufferCtx.shadowBlur = 20;
+                        bufferCtx.shadowColor = THEMES[CONFIG.THEME].trail;
+                        bufferCtx.beginPath();
+                        bufferCtx.moveTo(last.x, last.y);
+                        bufferCtx.lineTo(head.x, head.y);
+                        bufferCtx.stroke();
+                        // Reset shadow for buffer
+                        bufferCtx.shadowBlur = 0;
+                    }
+                }
+            }
+
+            // Update Particles
+            const themeColors = THEMES[CONFIG.THEME];
+
+            for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                const p = particles[i];
+
+                // Twinkle
+                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase); // Reduced max alpha
+
+                // Attraction to head - GLOBAL now
+                if (isDrawing) {
+                    const dx = head.x - p.x;
+                    const dy = head.y - p.y;
+                    const distSq = dx * dx + dy * dy;
+                    const dist = Math.sqrt(distSq);
+
+                    // Global Gravity / Suction
+                    // Force stronger when closer, but active everywhere
+                    // Standard gravity is 1/r^2, but for visual effect let's do 1/r or constant + swirl
+
+                    const force = 5000 / (distSq + 1000); // Softened inverse square
+
+                    // Spiral
+                    const angle = Math.atan2(dy, dx);
+                    const spiralAngle = angle + Math.PI / 2;
+
+                    // Velocity modification
+                    p.vx += Math.cos(angle) * force * 2.0; // Pull in
+                    p.vy += Math.sin(angle) * force * 2.0;
+
+                    // Swirl component (stronger near center)
+                    const swirlForce = force * 1.5;
+                    p.vx += Math.cos(spiralAngle) * swirlForce;
+                    p.vy += Math.sin(spiralAngle) * swirlForce;
+
+                    // "Consumed" / Respawn
+                    if (dist < 15) {
+                        // Sparkle effect / respawn at edges to flow in again
+                        // Pick a random angle and large radius
+                        const respawnAngle = random() * Math.PI * 2;
+                        const respawnDist = Math.max(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.8;
+                        p.x = head.x + Math.cos(respawnAngle) * respawnDist;
+                        p.y = head.y + Math.sin(respawnAngle) * respawnDist;
+                        p.vx = (random() - 0.5); // Reset velocity
+                        p.vy = (random() - 0.5);
+                    }
+                }
+
+                // Physics
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Drag - increased for stability
+                p.vx *= 0.92;
+                p.vy *= 0.92;
+
+                // Drift
+                if (!isDrawing) {
+                    p.x += Math.sin(now * 0.001 + p.phase) * 0.2;
+                    p.y += Math.cos(now * 0.001 + p.phase) * 0.2;
+                }
+            }
+
+            // --- RENDER ---
+
+            // 1. Clear Main
+            ctx.globalCompositeOperation = 'source-over'; // Ensure default mode for clear
+            ctx.fillStyle = '#050510'; // Dark background
+            ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            // 2. Draw Particles (Additive)
+            ctx.globalCompositeOperation = 'lighter'; // Additive blending
+
+            // Batch draw particles? Or individual?
+            // For 12k particles, individual Rects is fastest way in Canvas without puttingImageData
+            // But we want color.
+
+            const r = parseInt(themeColors.secondary.split(',')[0]);
+            const g = parseInt(themeColors.secondary.split(',')[1]);
+            const b = parseInt(themeColors.secondary.split(',')[2]);
+            const colorBase = `rgba(${r},${g},${b},`;
+
+            for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                const p = particles[i];
+                ctx.fillStyle = colorBase + p.alpha + ')';
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            }
+
+            // 3. Draw Trail Buffer (Bloom)
+
+            // Direct draw (sharp)
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(bufferCanvas, 0, 0);
+
+            // Glow draw (blurred & additive)
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.filter = 'blur(15px)';
+            ctx.globalAlpha = 0.6;
+            ctx.drawImage(bufferCanvas, 0, 0);
+
+            // Reset context
+            ctx.filter = 'none';
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+
+            // 4. Draw Leading Head Glow
+            if (isDrawing) {
+                const headColor = `rgba(${themeColors.primary}, 1)`;
+
+                // Big radial glow
+                const grad = ctx.createRadialGradient(head.x, head.y, 10, head.x, head.y, 60);
+                grad.addColorStop(0, headColor);
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+                ctx.fillStyle = grad;
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillRect(head.x - 60, head.y - 60, 120, 120);
+
+                // Bright tip
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(head.x, head.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
