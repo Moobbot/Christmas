@@ -42,7 +42,7 @@
             WIDTH: 1080,
             HEIGHT: 1920,
             DURATION: 6.0,    // Time to draw heart in seconds
-            PARTICLES: 12000,
+            PARTICLES: 20000,
             SEED: 42,
             THEME: "purple",
             TRAIL_WIDTH: 10,
@@ -242,11 +242,15 @@
                 isDrawing = false;
             }
 
+            // Rainbow Hue: 0 (Red) -> 280 (Purple)
+            const currentHue = progress * 280;
+            const currentColorHslaPrefix = `hsla(${currentHue}, 100%, 70%,`; // Lightness 70% for neon
+            const currentColorHsl = `hsl(${currentHue}, 100%, 70%)`;
+
             const head = getHeartPoint(progress);
 
             // Add head to trail
             if (isDrawing) {
-                // Only add if moved enough
                 if (trailPoints.length === 0) {
                     trailPoints.push(head);
                 } else {
@@ -254,31 +258,29 @@
                     const dist = Math.hypot(head.x - last.x, head.y - last.y);
                     if (dist > 5) {
                         trailPoints.push(head);
-                        // Draw segment to buffer immediately to persistent trail
-                        bufferCtx.strokeStyle = THEMES[CONFIG.THEME].trail;
-                        bufferCtx.lineWidth = CONFIG.TRAIL_WIDTH;
+
+                        // Draw segment to buffer immediately (Continuous Line)
+                        bufferCtx.strokeStyle = currentColorHsl;
+                        bufferCtx.lineWidth = 4; // Thinner
                         bufferCtx.lineCap = 'round';
                         bufferCtx.lineJoin = 'round';
-                        bufferCtx.shadowBlur = 20;
-                        bufferCtx.shadowColor = THEMES[CONFIG.THEME].trail;
+                        bufferCtx.shadowBlur = 15;
+                        bufferCtx.shadowColor = currentColorHsl;
                         bufferCtx.beginPath();
                         bufferCtx.moveTo(last.x, last.y);
                         bufferCtx.lineTo(head.x, head.y);
                         bufferCtx.stroke();
-                        // Reset shadow for buffer
                         bufferCtx.shadowBlur = 0;
                     }
                 }
             }
 
             // Update Particles
-            const themeColors = THEMES[CONFIG.THEME];
-
             for (let i = 0; i < CONFIG.PARTICLES; i++) {
                 const p = particles[i];
 
                 // Twinkle
-                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase); // Reduced max alpha
+                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase);
 
                 // Attraction to head - GLOBAL now
                 if (isDrawing) {
@@ -288,33 +290,44 @@
                     const dist = Math.sqrt(distSq);
 
                     // Global Gravity / Suction
-                    // Force stronger when closer, but active everywhere
-                    // Standard gravity is 1/r^2, but for visual effect let's do 1/r or constant + swirl
-
-                    const force = 5000 / (distSq + 1000); // Softened inverse square
+                    // Increased strength for "rapid convergence" effect
+                    const force = 20000 / (distSq + 2000);
 
                     // Spiral
                     const angle = Math.atan2(dy, dx);
                     const spiralAngle = angle + Math.PI / 2;
 
                     // Velocity modification
-                    p.vx += Math.cos(angle) * force * 2.0; // Pull in
-                    p.vy += Math.sin(angle) * force * 2.0;
+                    p.vx += Math.cos(angle) * force * 5.0; // Stronger Pull
+                    p.vy += Math.sin(angle) * force * 5.0;
 
-                    // Swirl component (stronger near center)
-                    const swirlForce = force * 1.5;
+                    // Swirl
+                    const swirlForce = force * 2.0;
                     p.vx += Math.cos(spiralAngle) * swirlForce;
                     p.vy += Math.sin(spiralAngle) * swirlForce;
 
-                    // "Consumed" / Respawn
-                    if (dist < 15) {
-                        // Sparkle effect / respawn at edges to flow in again
-                        // Pick a random angle and large radius
+                    // "Consumed" / Hit the target
+                    // When particles hit the head, they PAINT the heart
+                    // Thinner condition: dist < 10 (distSq < 100)
+                    if (distSq < 100) {
+                        // Paint onto buffer
+                        // Use higher alpha for "denser" look
+                        bufferCtx.globalCompositeOperation = 'lighter';
+                        bufferCtx.fillStyle = currentColorHsl; // Use current rainbow color
+                        bufferCtx.globalAlpha = 0.3; // Lower alpha so solid line dominates
+                        bufferCtx.beginPath();
+                        // Smaller dots for finer detail
+                        bufferCtx.arc(p.x, p.y, random() * 1.5 + 0.5, 0, Math.PI * 2);
+                        bufferCtx.fill();
+                        bufferCtx.globalAlpha = 1.0;
+                        bufferCtx.globalCompositeOperation = 'source-over';
+
+                        // Respawn
                         const respawnAngle = random() * Math.PI * 2;
                         const respawnDist = Math.max(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.8;
                         p.x = head.x + Math.cos(respawnAngle) * respawnDist;
                         p.y = head.y + Math.sin(respawnAngle) * respawnDist;
-                        p.vx = (random() - 0.5); // Reset velocity
+                        p.vx = (random() - 0.5);
                         p.vy = (random() - 0.5);
                     }
                 }
@@ -323,7 +336,7 @@
                 p.x += p.vx;
                 p.y += p.vy;
 
-                // Drag - increased for stability
+                // Drag
                 p.vx *= 0.92;
                 p.vy *= 0.92;
 
@@ -337,25 +350,17 @@
             // --- RENDER ---
 
             // 1. Clear Main
-            ctx.globalCompositeOperation = 'source-over'; // Ensure default mode for clear
-            ctx.fillStyle = '#050510'; // Dark background
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = '#050510';
             ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
             // 2. Draw Particles (Additive)
-            ctx.globalCompositeOperation = 'lighter'; // Additive blending
-
-            // Batch draw particles? Or individual?
-            // For 12k particles, individual Rects is fastest way in Canvas without puttingImageData
-            // But we want color.
-
-            const r = parseInt(themeColors.secondary.split(',')[0]);
-            const g = parseInt(themeColors.secondary.split(',')[1]);
-            const b = parseInt(themeColors.secondary.split(',')[2]);
-            const colorBase = `rgba(${r},${g},${b},`;
+            ctx.globalCompositeOperation = 'lighter';
 
             for (let i = 0; i < CONFIG.PARTICLES; i++) {
                 const p = particles[i];
-                ctx.fillStyle = colorBase + p.alpha + ')';
+                // Use HSLA for rainbow effect
+                ctx.fillStyle = currentColorHslaPrefix + p.alpha + ')';
                 ctx.fillRect(p.x, p.y, p.size, p.size);
             }
 
@@ -378,11 +383,9 @@
 
             // 4. Draw Leading Head Glow
             if (isDrawing) {
-                const headColor = `rgba(${themeColors.primary}, 1)`;
-
                 // Big radial glow
                 const grad = ctx.createRadialGradient(head.x, head.y, 10, head.x, head.y, 60);
-                grad.addColorStop(0, headColor);
+                grad.addColorStop(0, currentColorHsl);
                 grad.addColorStop(1, 'rgba(0,0,0,0)');
 
                 ctx.fillStyle = grad;
