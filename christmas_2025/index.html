@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Christmas 2025 - Neon Heart</title>
+    <title>Christmas 2025 - Neon Heart 3D</title>
     <style>
         body {
             margin: 0;
@@ -34,7 +34,7 @@
     </style>
 </head>
 <body>
-    <div id="debug">FPS: 60<br>Theme: purple</div>
+    <div id="debug">FPS: 60<br>Mode: 3D</div>
     <script>
         // --- CONFIGURATION ---
         // Width/Height will be overwritten by resize()
@@ -44,27 +44,8 @@
             DURATION: 6.0,    // Time to draw heart in seconds
             PARTICLES: 20000,
             SEED: 42,
-            THEME: "purple",
-            TRAIL_WIDTH: 10,
-            FPS_UPDATE_INTERVAL: 500
-        };
-
-        const THEMES = {
-            purple: {
-                primary: "255, 0, 255",   // Magenta
-                secondary: "128, 0, 255", // Purple
-                trail: "#ff00ff"
-            },
-            orange: {
-                primary: "255, 165, 0",   // Orange
-                secondary: "255, 215, 0", // Gold
-                trail: "#ffa500"
-            },
-            green: {
-                primary: "0, 255, 127",   // Spring Green
-                secondary: "0, 255, 255", // Cyan
-                trail: "#00ff7f"
-            }
+            FPS_UPDATE_INTERVAL: 500,
+            FOCAL_LENGTH: 800 // For 3D Projection
         };
 
         // --- SEEDED RANDOM ---
@@ -79,13 +60,15 @@
         let canvas, ctx;
         let bufferCanvas, bufferCtx; // For trail & bloom
         let particles = [];
-        let trailPoints = [];
+        let trailPoints = []; // Stores {x, y, z, color}
         let startTime = 0;
         let lastTime = 0;
         let isDrawing = false;
-        let animationId;
         let lastFpsTime = 0;
         let framesSinceLastFps = 0;
+
+        // Camera rotation
+        let camAngleY = 0;
 
         // --- INIT ---
         function init() {
@@ -105,7 +88,9 @@
             resize(); // Initial resize
 
             // Controls
-            window.addEventListener('keydown', handleInput);
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'r' || e.key === 'R') restart();
+            });
 
             // Note: restart() is called inside resize() so we don't need it here
             requestAnimationFrame(loop);
@@ -124,41 +109,26 @@
             CONFIG.HEIGHT = window.innerHeight;
         }
 
-        function handleInput(e) {
-            switch (e.key) {
-                case '1': changeTheme('purple'); break;
-                case '2': changeTheme('orange'); break;
-                case '3': changeTheme('green'); break;
-                case 'r': runRestart(); break;
-                case 'R': runRestart(); break;
-            }
-        }
-
-        function changeTheme(name) {
-            CONFIG.THEME = name;
-            updateDebug();
-        }
-
-        function runRestart() {
-            restart();
-        }
-
-        function updateDebug(fps = 60) {
-            document.getElementById('debug').innerHTML = `FPS: ${fps}<br>Theme: ${CONFIG.THEME}`;
-        }
-
         function restart() {
             seedState = CONFIG.SEED; // Reset seed
             particles = [];
             trailPoints = [];
+            camAngleY = 0;
 
-            // init particles
+            // init particles in 3D
             for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                // Random position in a sphere roughly size of screen
+                const r = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.8 * Math.cbrt(random());
+                const theta = random() * Math.PI * 2;
+                const phi = Math.acos(2 * random() - 1);
+
                 particles.push({
-                    x: random() * CONFIG.WIDTH,
-                    y: random() * CONFIG.HEIGHT,
-                    vx: (random() - 0.5) * 0.5, // Slow drift
-                    vy: (random() - 0.5) * 0.5,
+                    x: r * Math.sin(phi) * Math.cos(theta),
+                    y: r * Math.sin(phi) * Math.sin(theta),
+                    z: r * Math.cos(phi),
+                    vx: (random() - 0.5) * 2,
+                    vy: (random() - 0.5) * 2,
+                    vz: (random() - 0.5) * 2,
                     size: random() * 2 + 0.5,
                     alpha: random(),
                     phase: random() * Math.PI * 2
@@ -172,64 +142,83 @@
             isDrawing = true;
         }
 
-        // --- MATH ---
+        // --- 3D MATH ---
+        function rotateY(x, y, z, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: x * cos - z * sin,
+                y: y,
+                z: x * sin + z * cos
+            };
+        }
+
+        function project(x, y, z) {
+            // Camera is at (0, 0, -FOCAL_LENGTH*2)? No, assume camera is at origin looking at World.
+            // Actually usually we move World away from Camera.
+            // Let's assume World center is (0,0,0) and Camera is at (0, 0, -1000).
+            // So we shift Z by +1000 before projection.
+
+            const zOffset = 1000;
+            const contextZ = z + zOffset; // Distance from camera
+
+            if (contextZ <= 0) return null; // Behind camera
+
+            const scale = CONFIG.FOCAL_LENGTH / contextZ;
+
+            return {
+                x: x * scale + CONFIG.WIDTH / 2, // Center on screen
+                y: y * scale + CONFIG.HEIGHT / 2,
+                scale: scale,
+                z: z // Keep original Z for sorting if needed
+            };
+        }
+
+        // --- HEART MATH ---
         function getHeartPoint(t) {
-            // Map t (0..1) to radians (0..2PI)
             const rad = t * Math.PI * 2;
 
-            // User requested algorithm:
-            // x = a * sin^3(t)
-            // y = (13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)) / b
-
-            // Dynamic scale to fit screen
-            // Parametric bounds approx: x[-16, 16], y[-17, 5]
-            // Max dimension span is ~32 units.
-            // We want it to take up about 80% of the smaller screen dimension?
-            // span * scale = 0.8 * min(w, h)
-            // 32 * scale = 0.8 * min(w, h) => scale = min(w, h) / 40
-
+            // Scale based on screen size
             const minDim = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT);
             const scale = minDim / 40;
 
             const a = 16;
             const b = 1;
 
-            // Apply formula
-            // Note: We use Math.pow(Math.sin(rad), 3) for sin^3(t)
+            // 2D Heart Formula
             const xRaw = a * Math.pow(Math.sin(rad), 3);
             const yRaw = (13 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad)) / b;
 
-            // Convert to canvas coordinates
-            // Negate Y because canvas Y-axis points down, while mathematical Y points up
+            // Convert to 3D world coords
+            // We'll give it a slight curve in Z too to make it interesting? 
+            // Or just flat heart rotating? Let's do flat heart first.
+            // x, y centered at 0,0
+
             const x = xRaw * scale;
-            const y = -yRaw * scale;
+            const y = -yRaw * scale; // Flip Y
+            const z = 0;
 
-            // Center it
-            const cx = CONFIG.WIDTH / 2;
-            const cy = CONFIG.HEIGHT / 2;
-
-            return {
-                x: cx + x,
-                y: cy + y
-            };
+            return { x, y, z };
         }
 
         // --- LOOP ---
         function loop(now) {
             requestAnimationFrame(loop);
 
-            // Cap dt to prevent explosion on tab switch
             const dt = Math.min((now - lastTime) / 1000, 0.1);
             lastTime = now;
 
             // FPS Calc
             if (now - lastFpsTime > CONFIG.FPS_UPDATE_INTERVAL) {
                 const fps = Math.round(framesSinceLastFps * 1000 / (now - lastFpsTime));
-                updateDebug(fps);
+                document.getElementById('debug').innerHTML = `FPS: ${fps}<br>Mode: 3D`;
                 lastFpsTime = now;
                 framesSinceLastFps = 0;
             }
             framesSinceLastFps++;
+
+            // Auto Rotate Camera
+            camAngleY += dt * 0.3; // Slow rotation
 
             // Animation Logic
             const elapsed = (now - startTime) / 1000;
@@ -244,159 +233,197 @@
 
             // Rainbow Hue: 0 (Red) -> 280 (Purple)
             const currentHue = progress * 280;
-            const currentColorHslaPrefix = `hsla(${currentHue}, 100%, 70%,`; // Lightness 70% for neon
+            const currentColorHslaPrefix = `hsla(${currentHue}, 100%, 70%,`;
             const currentColorHsl = `hsl(${currentHue}, 100%, 70%)`;
 
-            const head = getHeartPoint(progress);
+            // Current Drawing Head in WORLD space
+            const headWorld = getHeartPoint(progress);
 
             // Add head to trail
             if (isDrawing) {
                 if (trailPoints.length === 0) {
-                    trailPoints.push(head);
+                    trailPoints.push({ ...headWorld, color: currentColorHsl });
                 } else {
                     const last = trailPoints[trailPoints.length - 1];
-                    const dist = Math.hypot(head.x - last.x, head.y - last.y);
+                    const dist = Math.hypot(headWorld.x - last.x, headWorld.y - last.y, headWorld.z - last.z);
                     if (dist > 5) {
-                        trailPoints.push(head);
-
-                        // Draw segment to buffer immediately (Continuous Line)
-                        bufferCtx.strokeStyle = currentColorHsl;
-                        bufferCtx.lineWidth = 4; // Thinner
-                        bufferCtx.lineCap = 'round';
-                        bufferCtx.lineJoin = 'round';
-                        bufferCtx.shadowBlur = 15;
-                        bufferCtx.shadowColor = currentColorHsl;
-                        bufferCtx.beginPath();
-                        bufferCtx.moveTo(last.x, last.y);
-                        bufferCtx.lineTo(head.x, head.y);
-                        bufferCtx.stroke();
-                        bufferCtx.shadowBlur = 0;
+                        trailPoints.push({ ...headWorld, color: currentColorHsl });
                     }
                 }
             }
 
-            // Update Particles
-            for (let i = 0; i < CONFIG.PARTICLES; i++) {
-                const p = particles[i];
-
-                // Twinkle
-                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase);
-
-                // Attraction to head - GLOBAL now
-                if (isDrawing) {
-                    const dx = head.x - p.x;
-                    const dy = head.y - p.y;
-                    const distSq = dx * dx + dy * dy;
-                    const dist = Math.sqrt(distSq);
-
-                    // Global Gravity / Suction
-                    // Increased strength for "rapid convergence" effect
-                    const force = 20000 / (distSq + 2000);
-
-                    // Spiral
-                    const angle = Math.atan2(dy, dx);
-                    const spiralAngle = angle + Math.PI / 2;
-
-                    // Velocity modification
-                    p.vx += Math.cos(angle) * force * 5.0; // Stronger Pull
-                    p.vy += Math.sin(angle) * force * 5.0;
-
-                    // Swirl
-                    const swirlForce = force * 2.0;
-                    p.vx += Math.cos(spiralAngle) * swirlForce;
-                    p.vy += Math.sin(spiralAngle) * swirlForce;
-
-                    // "Consumed" / Hit the target
-                    // When particles hit the head, they PAINT the heart
-                    // Thinner condition: dist < 10 (distSq < 100)
-                    if (distSq < 100) {
-                        // Paint onto buffer
-                        // Use higher alpha for "denser" look
-                        bufferCtx.globalCompositeOperation = 'lighter';
-                        bufferCtx.fillStyle = currentColorHsl; // Use current rainbow color
-                        bufferCtx.globalAlpha = 0.3; // Lower alpha so solid line dominates
-                        bufferCtx.beginPath();
-                        // Smaller dots for finer detail
-                        bufferCtx.arc(p.x, p.y, random() * 1.5 + 0.5, 0, Math.PI * 2);
-                        bufferCtx.fill();
-                        bufferCtx.globalAlpha = 1.0;
-                        bufferCtx.globalCompositeOperation = 'source-over';
-
-                        // Respawn
-                        const respawnAngle = random() * Math.PI * 2;
-                        const respawnDist = Math.max(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.8;
-                        p.x = head.x + Math.cos(respawnAngle) * respawnDist;
-                        p.y = head.y + Math.sin(respawnAngle) * respawnDist;
-                        p.vx = (random() - 0.5);
-                        p.vy = (random() - 0.5);
-                    }
-                }
-
-                // Physics
-                p.x += p.vx;
-                p.y += p.vy;
-
-                // Drag
-                p.vx *= 0.92;
-                p.vy *= 0.92;
-
-                // Drift
-                if (!isDrawing) {
-                    p.x += Math.sin(now * 0.001 + p.phase) * 0.2;
-                    p.y += Math.cos(now * 0.001 + p.phase) * 0.2;
-                }
-            }
-
-            // --- RENDER ---
+            // --- UPDATE & RENDER ---
 
             // 1. Clear Main
             ctx.globalCompositeOperation = 'source-over';
             ctx.fillStyle = '#050510';
             ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
 
-            // 2. Draw Particles (Additive)
+            // 2. Draw 3D Particles
             ctx.globalCompositeOperation = 'lighter';
+
+            // To make 3D logic correct we really should project everything first
+            // But updating logic needs World coords.
 
             for (let i = 0; i < CONFIG.PARTICLES; i++) {
                 const p = particles[i];
-                // Use HSLA for rainbow effect
-                ctx.fillStyle = currentColorHslaPrefix + p.alpha + ')';
-                ctx.fillRect(p.x, p.y, p.size, p.size);
+                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase);
+
+                // Attraction to head (WORLD SPACE)
+                if (isDrawing) {
+                    const dx = headWorld.x - p.x;
+                    const dy = headWorld.y - p.y;
+                    const dz = headWorld.z - p.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+
+                    const force = 20000 / (distSq + 2000);
+
+                    // 3D vector logic can be tricky without vector class
+                    // Normalized dir
+                    const dist = Math.sqrt(distSq);
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    const nz = dz / dist;
+
+                    // Pull
+                    p.vx += nx * force * 5.0;
+                    p.vy += ny * force * 5.0;
+                    p.vz += nz * force * 5.0;
+
+                    // Swirl (Use cross product with Up vector? Simple swirl around Y?)
+                    // Simple Tangent swirl?
+                    // Let's just do random noise or simple swirl around Y axis
+                    p.vx += -p.z * 0.001 * force;
+                    p.vz += p.x * 0.001 * force;
+
+                    // "Consumed" / Hit Condition
+                    if (distSq < 200) {
+                        // Instead of painting to buffer (which is 2D), we must now keep 3D points?
+                        // Actually, we can't easily use the 2D buffer trail trick in 3D because the trail moves/rotates.
+                        // We must RENDER the trail every frame in 3D.
+                        // AND we can render "stardust" points that persist.
+                        // For performance, let's just Respawn and NOT paint to buffer.
+                        // OR we add static "dust" points to a list to be rendered.
+
+                        // Let's maintain a "stardust" array? 20k particles is enough, let's just respawn.
+                        // But user liked the "dense" line.
+                        // We will render the Trail Points as dense dots. 
+
+                        const respawnAngle = random() * Math.PI * 2;
+                        const respawnDist = Math.max(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.8;
+                        // Respawn
+                        p.x = headWorld.x + Math.cos(respawnAngle) * respawnDist;
+                        p.y = headWorld.y + Math.sin(respawnAngle) * respawnDist;
+                        p.z = (random() - 0.5) * 1000;
+                        p.vx = (random() - 0.5);
+                        p.vy = (random() - 0.5);
+                        p.vz = (random() - 0.5);
+                    }
+                }
+
+                // Physics
+                p.x += p.vx;
+                p.y += p.vy;
+                p.z += p.vz;
+
+                p.vx *= 0.92;
+                p.vy *= 0.92;
+                p.vz *= 0.92;
+
+                if (!isDrawing) {
+                    p.x += Math.sin(now * 0.001 + p.phase) * 0.2;
+                    p.y += Math.cos(now * 0.001 + p.phase) * 0.2;
+                    p.z += Math.sin(now * 0.002 + p.phase) * 0.2;
+                }
+
+                // 3D PROJECTION & DRAW
+                // Rotate
+                const rotated = rotateY(p.x, p.y, p.z, camAngleY);
+                // Project
+                const proj = project(rotated.x, rotated.y, rotated.z);
+
+                if (proj) {
+                    // Draw
+                    const size = p.size * proj.scale;
+                    ctx.fillStyle = currentColorHslaPrefix + p.alpha + ')';
+                    ctx.fillRect(proj.x, proj.y, size, size);
+                }
             }
 
-            // 3. Draw Trail Buffer (Bloom)
+            // 3. Draw Trail (3D Line + Dense Dots)
+            // Since we can't use 2D buffer for rotating 3D object, we must draw it every frame.
+            // This is more expensive but valid for modern PCs.
 
-            // Direct draw (sharp)
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.drawImage(bufferCanvas, 0, 0);
+            if (trailPoints.length > 1) {
+                // Draw Solid Line
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
 
-            // Glow draw (blurred & additive)
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.filter = 'blur(15px)';
-            ctx.globalAlpha = 0.6;
-            ctx.drawImage(bufferCanvas, 0, 0);
+                // We need to batch segments by color or draw individually
+                // Individual segments for gradient
 
-            // Reset context
-            ctx.filter = 'none';
-            ctx.globalAlpha = 1.0;
-            ctx.globalCompositeOperation = 'source-over';
+                for (let i = 0; i < trailPoints.length - 1; i++) {
+                    const p1 = trailPoints[i];
+                    const p2 = trailPoints[i + 1];
+
+                    const r1 = rotateY(p1.x, p1.y, p1.z, camAngleY);
+                    const r2 = rotateY(p2.x, p2.y, p2.z, camAngleY);
+
+                    const proj1 = project(r1.x, r1.y, r1.z);
+                    const proj2 = project(r2.x, r2.y, r2.z);
+
+                    if (proj1 && proj2) {
+                        ctx.strokeStyle = p1.color;
+                        ctx.lineWidth = 4 * proj1.scale; // Scale thickness
+                        ctx.beginPath();
+                        ctx.moveTo(proj1.x, proj1.y);
+                        ctx.lineTo(proj2.x, proj2.y);
+                        ctx.stroke();
+
+                        // Fake "Glow/Bloom" by drawing again wider and lower alpha?
+                        // Or rely on global `ctx.filter`?
+                        // `ctx.filter` affects everything. Let's try to not use it for per-segment to allow high FPS.
+                        // Or just draw the "Dense Stardust" along the line?
+
+                        // Simulate "Denser" stardust on the line
+                        // Draw random dots around this segment
+                        /*
+                        ctx.fillStyle = p1.color;
+                        const dustCount = 2; 
+                        for(let j=0; j<dustCount; j++) {
+                            const t = random();
+                            const dx = (proj2.x - proj1.x) * t + proj1.x + (random()-0.5)*10*proj1.scale;
+                            const dy = (proj2.y - proj1.y) * t + proj1.y + (random()-0.5)*10*proj1.scale;
+                            ctx.fillRect(dx, dy, 2*proj1.scale, 2*proj1.scale);
+                        }
+                        */
+                    }
+                }
+            }
 
             // 4. Draw Leading Head Glow
             if (isDrawing) {
-                // Big radial glow
-                const grad = ctx.createRadialGradient(head.x, head.y, 10, head.x, head.y, 60);
-                grad.addColorStop(0, currentColorHsl);
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                const rHead = rotateY(headWorld.x, headWorld.y, headWorld.z, camAngleY);
+                const pHead = project(rHead.x, rHead.y, rHead.z);
 
-                ctx.fillStyle = grad;
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.fillRect(head.x - 60, head.y - 60, 120, 120);
+                if (pHead) {
+                    // Big radial glow
+                    const radius = 60 * pHead.scale;
+                    const grad = ctx.createRadialGradient(pHead.x, pHead.y, 10 * pHead.scale, pHead.x, pHead.y, radius);
+                    grad.addColorStop(0, currentColorHsl);
+                    grad.addColorStop(1, 'rgba(0,0,0,0)');
 
-                // Bright tip
-                ctx.fillStyle = '#fff';
-                ctx.beginPath();
-                ctx.arc(head.x, head.y, 4, 0, Math.PI * 2);
-                ctx.fill();
+                    ctx.fillStyle = grad;
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillRect(pHead.x - radius, pHead.y - radius, radius * 2, radius * 2);
+
+                    // Bright tip
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(pHead.x, pHead.y, 4 * pHead.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Christmas 2025 - 6 Neon Hearts 3D</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #050510;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #ddd;
+            font-family: monospace;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+        }
+
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px #000;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="debug">FPS: 60<br>Mode: 6-Heart Mandala</div>
+    <script>
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            WIDTH: 1080,
+            HEIGHT: 1920,
+            DURATION: 6.0,    // Thời gian vẽ
+            PARTICLES: 25000, // Tăng nhẹ số hạt cho dày
+            HEART_COUNT: 6,   // Số lượng trái tim
+            SEED: 42,
+            FPS_UPDATE_INTERVAL: 500,
+            FOCAL_LENGTH: 800
+        };
+
+        // --- SEEDED RANDOM ---
+        let seedState = CONFIG.SEED;
+        function random() {
+            seedState = (seedState * 1664525 + 1013904223) % 4294967296;
+            return seedState / 4294967296;
+        }
+
+        // --- STATE ---
+        let canvas, ctx;
+        let particles = [];
+        let trailPoints = []; // Lưu đường vẽ gốc (1 trái tim)
+        let startTime = 0;
+        let lastTime = 0;
+        let isDrawing = false;
+        let lastFpsTime = 0;
+        let framesSinceLastFps = 0;
+        let camAngleY = 0;
+
+        // --- INIT ---
+        function init() {
+            canvas = document.createElement('canvas');
+            document.body.appendChild(canvas);
+            ctx = canvas.getContext('2d');
+
+            window.addEventListener('resize', () => {
+                resize();
+                restart();
+            });
+            resize();
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'r' || e.key === 'R') restart();
+            });
+
+            requestAnimationFrame(loop);
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            CONFIG.WIDTH = window.innerWidth;
+            CONFIG.HEIGHT = window.innerHeight;
+        }
+
+        function restart() {
+            seedState = CONFIG.SEED;
+            particles = [];
+            trailPoints = [];
+            camAngleY = 0;
+
+            // Init particles
+            for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                const r = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT) * 1.0 * Math.cbrt(random());
+                const theta = random() * Math.PI * 2;
+                const phi = Math.acos(2 * random() - 1);
+
+                particles.push({
+                    x: r * Math.sin(phi) * Math.cos(theta),
+                    y: r * Math.sin(phi) * Math.sin(theta),
+                    z: r * Math.cos(phi),
+                    vx: (random() - 0.5) * 2,
+                    vy: (random() - 0.5) * 2,
+                    vz: (random() - 0.5) * 2,
+                    size: random() * 2 + 0.5,
+                    alpha: random(),
+                    phase: random() * Math.PI * 2,
+                    // Quan trọng: Gán mỗi hạt thuộc về 1 trong 6 trái tim (0 đến 5)
+                    targetIndex: Math.floor(random() * CONFIG.HEART_COUNT)
+                });
+            }
+
+            startTime = performance.now();
+            isDrawing = true;
+        }
+
+        // --- 3D MATH ---
+        function rotateY(x, y, z, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: x * cos - z * sin,
+                y: y,
+                z: x * sin + z * cos
+            };
+        }
+
+        // Hàm mới: Xoay quanh trục Z để tạo hình bông hoa
+        function rotateZ(x, y, z, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: x * cos - y * sin,
+                y: x * sin + y * cos,
+                z: z
+            };
+        }
+
+        function project(x, y, z) {
+            const zOffset = 1200; // Đẩy camera ra xa một chút để thấy hết 6 tim
+            const contextZ = z + zOffset;
+            if (contextZ <= 0) return null;
+            const scale = CONFIG.FOCAL_LENGTH / contextZ;
+            return {
+                x: x * scale + CONFIG.WIDTH / 2,
+                y: y * scale + CONFIG.HEIGHT / 2,
+                scale: scale,
+                z: z
+            };
+        }
+
+        // --- HEART MATH ---
+        function getHeartPoint(t) {
+            const rad = t * Math.PI * 2;
+            const minDim = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT);
+            // Giảm scale một chút để 6 trái tim không bị tràn màn hình
+            const scale = minDim / 55;
+
+            const a = 16;
+            const b = 1;
+            const xRaw = a * Math.pow(Math.sin(rad), 3);
+            const yRaw = (13 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad)) / b;
+
+            return {
+                x: xRaw * scale,
+                y: -yRaw * scale, // Flip Y
+                z: 0
+            };
+        }
+
+        // --- LOOP ---
+        function loop(now) {
+            requestAnimationFrame(loop);
+
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            // FPS Update
+            if (now - lastFpsTime > CONFIG.FPS_UPDATE_INTERVAL) {
+                const fps = Math.round(framesSinceLastFps * 1000 / (now - lastFpsTime));
+                document.getElementById('debug').innerHTML = `FPS: ${fps}<br>Mode: 6-Heart Star`;
+                lastFpsTime = now;
+                framesSinceLastFps = 0;
+            }
+            framesSinceLastFps++;
+
+            camAngleY += dt * 0.3; // Camera xoay nhẹ
+
+            // Progress Logic
+            const elapsed = (now - startTime) / 1000;
+            let progress = 0;
+            if (elapsed < CONFIG.DURATION) {
+                progress = elapsed / CONFIG.DURATION;
+                isDrawing = true;
+            } else {
+                progress = 1;
+                isDrawing = false;
+            }
+
+            // Màu sắc cầu vồng
+            const currentHue = progress * 360; // Full vòng màu
+            const currentColorHsl = `hsl(${currentHue}, 100%, 70%)`;
+            const currentColorHslaPrefix = `hsla(${currentHue}, 100%, 70%,`;
+
+            // 1. Tính toán điểm gốc (Base Head) của trái tim chuẩn
+            const baseHead = getHeartPoint(progress);
+
+            // 2. Tính toán 6 vị trí đầu bút thực tế (cho hạt đi theo)
+            const activeHeads = [];
+            for (let i = 0; i < CONFIG.HEART_COUNT; i++) {
+                const angleOffset = (Math.PI * 2 / CONFIG.HEART_COUNT) * i;
+                // Xoay điểm gốc quanh trục Z
+                const rotated = rotateZ(baseHead.x, baseHead.y, baseHead.z, angleOffset);
+                activeHeads.push(rotated);
+            }
+
+            // Cập nhật đường vẽ gốc (chỉ cần lưu 1 đường, khi vẽ sẽ nhân bản)
+            if (isDrawing) {
+                if (trailPoints.length === 0) {
+                    trailPoints.push({ ...baseHead, color: currentColorHsl });
+                } else {
+                    const last = trailPoints[trailPoints.length - 1];
+                    const dist = Math.hypot(baseHead.x - last.x, baseHead.y - last.y);
+                    if (dist > 3) { // Mật độ điểm
+                        trailPoints.push({ ...baseHead, color: currentColorHsl });
+                    }
+                }
+            }
+
+            // --- RENDER ---
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+            ctx.globalCompositeOperation = 'lighter';
+
+            // A. Cập nhật và vẽ hạt (Particles)
+            for (let i = 0; i < CONFIG.PARTICLES; i++) {
+                const p = particles[i];
+                p.alpha = 0.3 + 0.5 * Math.sin(now * 0.005 + p.phase);
+
+                if (isDrawing) {
+                    // Hạt nào thì đi theo đầu bút của trái tim đó (dựa vào targetIndex)
+                    const target = activeHeads[p.targetIndex];
+
+                    const dx = target.x - p.x;
+                    const dy = target.y - p.y;
+                    const dz = target.z - p.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    const force = 20000 / (distSq + 2000);
+
+                    const dist = Math.sqrt(distSq);
+                    p.vx += (dx / dist) * force * 5.0;
+                    p.vy += (dy / dist) * force * 5.0;
+                    p.vz += (dz / dist) * force * 5.0;
+
+                    // Swirl nhẹ
+                    p.vx += -p.y * 0.001 * force;
+                    p.vy += p.x * 0.001 * force;
+
+                    // Respawn nếu chạm vào đầu bút
+                    if (distSq < 200) {
+                        const respawnAngle = random() * Math.PI * 2;
+                        const respawnR = Math.min(CONFIG.WIDTH, CONFIG.HEIGHT) * 0.5;
+                        p.x = target.x + Math.cos(respawnAngle) * respawnR;
+                        p.y = target.y + Math.sin(respawnAngle) * respawnR;
+                        p.z = (random() - 0.5) * 500;
+                        p.vx = (random() - 0.5);
+                        p.vy = (random() - 0.5);
+                        p.vz = (random() - 0.5);
+                    }
+                }
+
+                // Physics cơ bản
+                p.x += p.vx;
+                p.y += p.vy;
+                p.z += p.vz;
+                p.vx *= 0.92; p.vy *= 0.92; p.vz *= 0.92;
+
+                if (!isDrawing) {
+                    // Floating effect khi vẽ xong
+                    p.x += Math.sin(now * 0.001 + p.phase) * 0.5;
+                    p.y += Math.cos(now * 0.001 + p.phase) * 0.5;
+                }
+
+                // 3D Projection cho hạt
+                // 1. Rotate Y (Camera)
+                const r = rotateY(p.x, p.y, p.z, camAngleY);
+                // 2. Project
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    const size = p.size * proj.scale;
+                    ctx.fillStyle = currentColorHslaPrefix + p.alpha + ')';
+                    ctx.fillRect(proj.x, proj.y, size, size);
+                }
+            }
+
+            // B. Vẽ đường trái tim (Trail) - Nhân bản 6 lần
+            if (trailPoints.length > 1) {
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Lặp qua từng đoạn của đường vẽ gốc
+                for (let i = 0; i < trailPoints.length - 1; i++) {
+                    const p1Base = trailPoints[i];
+                    const p2Base = trailPoints[i + 1];
+
+                    // Với mỗi đoạn, vẽ nó 6 lần xoay quanh trục Z
+                    for (let h = 0; h < CONFIG.HEART_COUNT; h++) {
+                        const angleZ = (Math.PI * 2 / CONFIG.HEART_COUNT) * h;
+
+                        // 1. Xoay quanh trục Z (Tạo hình hoa)
+                        const rZ1 = rotateZ(p1Base.x, p1Base.y, p1Base.z, angleZ);
+                        const rZ2 = rotateZ(p2Base.x, p2Base.y, p2Base.z, angleZ);
+
+                        // 2. Xoay quanh trục Y (Camera)
+                        const rY1 = rotateY(rZ1.x, rZ1.y, rZ1.z, camAngleY);
+                        const rY2 = rotateY(rZ2.x, rZ2.y, rZ2.z, camAngleY);
+
+                        // 3. Project
+                        const proj1 = project(rY1.x, rY1.y, rY1.z);
+                        const proj2 = project(rY2.x, rY2.y, rY2.z);
+
+                        if (proj1 && proj2) {
+                            ctx.strokeStyle = p1Base.color;
+                            ctx.lineWidth = 4 * proj1.scale;
+                            ctx.beginPath();
+                            ctx.moveTo(proj1.x, proj1.y);
+                            ctx.lineTo(proj2.x, proj2.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            // C. Vẽ đầu phát sáng (Glowing Heads)
+            if (isDrawing) {
+                for (let h = 0; h < activeHeads.length; h++) {
+                    const head = activeHeads[h];
+
+                    // Rotate Y (Camera)
+                    const rHead = rotateY(head.x, head.y, head.z, camAngleY);
+                    const pHead = project(rHead.x, rHead.y, rHead.z);
+
+                    if (pHead) {
+                        const radius = 40 * pHead.scale;
+                        const grad = ctx.createRadialGradient(pHead.x, pHead.y, 5 * pHead.scale, pHead.x, pHead.y, radius);
+                        grad.addColorStop(0, currentColorHsl);
+                        grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(pHead.x - radius, pHead.y - radius, radius * 2, radius * 2);
+
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(pHead.x, pHead.y, 3 * pHead.scale, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
