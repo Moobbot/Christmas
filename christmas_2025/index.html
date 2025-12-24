@@ -42,6 +42,7 @@
             PARTICLES: 12000, // Số lượng hạt
             HEART_COUNT: 6,   // 6 trái tim
             HEART_SIZE: 15,   // Kích thước
+            SNOW_COUNT: 800,  // Số lượng tuyết (Increased)
             FPS_UPDATE_INTERVAL: 500,
             FOCAL_LENGTH: 800
         };
@@ -49,6 +50,7 @@
         // --- STATE ---
         let canvas, ctx;
         let particles = [];
+        let snowflakes = []; // Array for snow
         let startTime = 0;
         let lastTime = 0;
         let camAngleY = 0; // Góc quay camera toàn cảnh
@@ -73,6 +75,7 @@
             resize();
 
             initParticles();
+            initSnow(); // Init snow
             requestAnimationFrame(loop);
         }
 
@@ -94,6 +97,22 @@
                 x: x * scale,
                 y: y * scale
             };
+        }
+
+        function initSnow() {
+            snowflakes = [];
+            for (let i = 0; i < CONFIG.SNOW_COUNT; i++) {
+                // Random position in big volume
+                const range = 2000;
+                snowflakes.push({
+                    x: (Math.random() - 0.5) * range,
+                    y: (Math.random() - 0.5) * range, // Start anywhere vertically
+                    z: (Math.random() - 0.5) * range,
+                    vy: 1 + Math.random() * 2, // Falling speed
+                    size: Math.random() * 2 + 1,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
         }
 
         function initParticles() {
@@ -186,7 +205,37 @@
             // Reduced power to 2.5 to make the end slightly less abrupt than 3
             const ease = Math.pow(progress, 2.5);
 
-            // Vẽ hạt
+            // 1. Vẽ Tuyết (Background)
+            for (let i = 0; i < snowflakes.length; i++) {
+                const s = snowflakes[i];
+
+                // Falling
+                s.y += s.vy;
+                // Wind?
+                s.x += Math.sin(now * 0.001 + s.phase) * 0.5;
+
+                // Reset
+                const resetY = 1000;
+                if (s.y > resetY) {
+                    s.y = -resetY;
+                    s.x = (Math.random() - 0.5) * 2000;
+                    s.z = (Math.random() - 0.5) * 2000;
+                }
+
+                // 3D Projection
+                const r = rotateY(s.x, s.y, s.z, camAngleY);
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    const alpha = 0.4 + 0.4 * Math.sin(now * 0.002 + s.phase);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, s.size * proj.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // 2. Vẽ Hạt Trái Tim
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
 
