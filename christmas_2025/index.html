@@ -215,15 +215,121 @@
         // --- STATE ---
         let canvas, ctx;
         let particles = [];
-        let snowflakes = [];
-        let snowFloor = [];
-        let accumulatedSnow = []; // NEW: Snow accumulation
-        const MAX_ACCUMULATED = 10000; // Max accumulated particles
-        let shapeParticles = []; // NEW SHAPE
+        let snowflakes = []; // RESTORED
+        // let snowFloor = []; // REMOVED
+        let galaxyParticles = []; // NEW: Galaxy Floor
+        const GALAXY_COUNT = 2500;
+        const GALAXY_COLORS = ['#0f0c29', '#302b63', '#24243e', '#00d2ff', '#3a7bd5', '#ffffff'];
+
+        let accumulatedSnow = []; // Keep for falling snow sticking? Or remove? User said "replace snow floor".
+        // I will keep accumulatedSnow as it adds interaction, but maybe disable "Snow Floor" static.
+        const MAX_ACCUMULATED = 10000;
+        let shapeParticles = [];
         let startTime = 0;
         let lastTime = 0;
 
         let snowImage;
+
+        // ...
+
+        function initGalaxyFloor() {
+            galaxyParticles = [];
+            for (let i = 0; i < GALAXY_COUNT; i++) {
+                resetGalaxyParticle({}, true);
+            }
+        }
+
+        function resetGalaxyParticle(p, initial = false) {
+            // Galaxy on XZ plane at y = ~500 (Floor)
+
+            // XZ plane radius
+            const range = 2000; // Wider than screen usually
+            const angle = Math.random() * Math.PI * 2;
+            // Initial distribution spread out, reset distribution at edge?
+            // Reference: radius = initial ? max : random*200 + ...
+            const radius = initial
+                ? Math.random() * range
+                : Math.random() * 200 + range * 0.8;
+
+            p.x = Math.cos(angle) * radius;
+            p.z = Math.sin(angle) * radius;
+            p.y = 500; // Floor Level
+
+            p.vx = 0;
+            p.vz = 0; // Velocity in XZ
+            p.size = Math.random() * 2 + 0.5;
+            p.color = GALAXY_COLORS[Math.floor(Math.random() * GALAXY_COLORS.length)];
+            p.life = Math.random() * 300 + 100;
+            p.friction = 0.96;
+
+            // Push if new
+            if (galaxyParticles.indexOf(p) === -1) galaxyParticles.push(p);
+        }
+
+        function updateAndDrawGalaxyFloor(now) {
+            ctx.lineWidth = 1.5;
+
+            // Xoay nhẹ màu sắc theo thời gian? Reference static palette.
+
+            for (let i = 0; i < galaxyParticles.length; i++) {
+                let p = galaxyParticles[i];
+
+                // PHYSICS (Converted from 2D Ref to 3D XZ)
+                const dx = p.x; // Center is 0,0,0
+                const dz = p.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                const angleToCenter = Math.atan2(dz, dx);
+
+                // Suction Logic
+                const suctionForce = 2.5;
+                const noise = Math.sin(dist * 0.02 - now * 0.002) * 0.5;
+                const angle = angleToCenter + Math.PI + 1.4 + noise;
+                const gravitySpeed = 2 + (200 / (dist + 10));
+
+                p.vx += Math.cos(angle) * 0.2;
+                p.vz += Math.sin(angle) * 0.2;
+                p.vx *= p.friction;
+                p.vz *= p.friction;
+
+                p.x += p.vx * gravitySpeed;
+                p.z += p.vz * gravitySpeed;
+                p.life--;
+
+                // Reset Logic
+                if (p.life <= 0 || dist < 10 || Math.abs(p.x) > 3000 || Math.abs(p.z) > 3000) {
+                    resetGalaxyParticle(p);
+                    continue;
+                }
+
+                // DRAW
+                // Current Pos
+                const r1 = applyCamera(p.x, p.y, p.z);
+                const proj1 = project(r1.x, r1.y, r1.z);
+
+                // Tail Pos (simulate motion blur)
+                const tailX = p.x - p.vx * 4;
+                const tailZ = p.z - p.vz * 4;
+                const r2 = applyCamera(tailX, p.y, tailZ);
+                const proj2 = project(r2.x, r2.y, r2.z);
+
+                if (proj1 && proj2) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = p.color; // Use sprite color? No, ref uses stroke.
+                    ctx.lineWidth = p.size * proj1.scale;
+                    // ctx.globalAlpha = 0.8; // Blend handled by drawBackground trail?
+
+                    ctx.moveTo(proj1.x, proj1.y);
+                    ctx.lineTo(proj2.x, proj2.y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // REMOVE OLD SNOW FLOOR FUNCS
+        /*
+        function initSnowFloor() { ... }
+        function drawSnowFloor() { ... }
+        */
 
         // Camera State
         let camAngleY = 0;
@@ -411,7 +517,7 @@
             initParticles();
             initShapeParticles(); // NEW SHAPE
             initSnow();
-            initSnowFloor();
+            initGalaxyFloor();
             requestAnimationFrame(loop);
         }
 
@@ -679,7 +785,7 @@
             updateAndDrawSnow(now);
             drawShapeParticles(now); // Draw New Shape
             drawAccumulatedSnow(now); // Draw Accumulated Snow
-            drawSnowFloor();
+            updateAndDrawGalaxyFloor(now); // Galaxy Floor
             updateAndDrawParticles(now, ease);
             drawCenterGlow();
         }
@@ -690,6 +796,8 @@
             ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
             ctx.globalCompositeOperation = 'lighter';
         }
+
+        // Removed initSnowFloor and drawSnowFloor function definitions here
 
         function updateAndDrawSnow(now) {
             const floorLevel = 500; // Match Mirror Platform height
@@ -781,6 +889,10 @@
         }
 
         function updateAndDrawParticles(now, ease) {
+            // Galaxy Flow Effect: Spiral Rotation
+            // As they get closer (ease -> 1), rotation slows to 0.
+            const spiral = (1 - ease) * 5.0; // 5 radians of spin during travel
+
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
 
@@ -791,15 +903,32 @@
                 const finalYy = p.targetY * breathingScale;
                 const finalZz = p.targetZ * breathingScale;
 
-                // Interpolate
-                p.x = p.startX + (finalXx - p.startX) * ease;
-                p.y = p.startY + (finalYy - p.startY) * ease;
-                p.z = p.startZ + (finalZz - p.startZ) * ease;
+                // Basic Interpolation
+                const lerpX = p.startX + (finalXx - p.startX) * ease;
+                const lerpY = p.startY + (finalYy - p.startY) * ease;
+                const lerpZ = p.startZ + (finalZz - p.startZ) * ease;
+
+                // --- VORTEX TWIST ---
+                // Rotate the current interpolated position around Y axis
+                // This creates the spiral "galaxy" path
+                const cosS = Math.cos(spiral);
+                const sinS = Math.sin(spiral);
+
+                // Spiral around center (0,0)
+                p.x = lerpX * cosS - lerpZ * sinS;
+                p.z = lerpX * sinS + lerpZ * cosS;
+                p.y = lerpY;
+
+                // Add a bit of "Galaxy Noise" that fades out
+                if (ease < 1) {
+                    const noise = (1 - ease) * 50 * Math.sin(now * 0.01 + p.phase);
+                    p.x += noise;
+                    p.y += noise;
+                    p.z += noise;
+                }
 
                 // 1. Apply Camera (Y then X)
                 const r = applyCamera(p.x, p.y, p.z);
-
-                // 2. Project
                 const proj = project(r.x, r.y, r.z);
 
                 if (proj) {

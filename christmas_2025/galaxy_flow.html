@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Inward Galaxy Flow</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+let particles = [];
+const particleCount = 2500; // Tăng số lượng hạt để nhìn rõ dòng chảy
+
+// Màu sắc ma mị hơn (Tím đậm -> Xanh neon -> Trắng)
+const colors = ['#0f0c29', '#302b63', '#24243e', '#00d2ff', '#3a7bd5', '#ffffff'];
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+
+class Particle {
+    constructor() {
+        this.reset(true); // true = khởi tạo ngẫu nhiên ban đầu
+    }
+
+    reset(initial = false) {
+        // Mẹo: Sinh ra hạt ở xa tâm để chúng có hành trình bị hút vào
+        // Nếu là lần đầu chạy (initial), rải đều. Nếu reset sau khi chết, ưu tiên sinh ở rìa.
+        const angle = Math.random() * Math.PI * 2;
+        const radius = initial ? Math.random() * Math.max(width, height) : Math.random() * 200 + Math.min(width, height) / 2;
+        
+        this.x = width / 2 + Math.cos(angle) * radius;
+        this.y = height / 2 + Math.sin(angle) * radius;
+        
+        this.vx = 0;
+        this.vy = 0;
+        this.size = Math.random() * 2 + 0.5;
+        this.color = colors[Math.floor(Math.random() * colors.length)];
+        this.life = Math.random() * 300 + 100;
+        this.friction = 0.96; // Độ trơn trượt
+    }
+
+    update() {
+        const dx = this.x - width / 2;
+        const dy = this.y - height / 2;
+        // Tính khoảng cách tới tâm
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        // Góc hiện tại so với tâm
+        const angleToCenter = Math.atan2(dy, dx);
+
+        // --- THUẬT TOÁN XOAY VÀO TRONG ---
+        // 1. angleToCenter: hướng thẳng ra ngoài.
+        // 2. + Math.PI: đảo ngược thành hướng thẳng vào tâm.
+        // 3. + 1.2: lệch đi một chút để tạo độ xoáy (thay vì lao thẳng tuột vào).
+        const suctionForce = 2.5; // Điều chỉnh số này để thay đổi độ xoắn (2.0 - 3.0)
+        const noise = Math.sin(dist * 0.02 - Date.now() * 0.002) * 0.5; // Tạo gợn sóng
+        
+        const angle = angleToCenter + Math.PI + 1.4 + noise;
+
+        // --- MÔ PHỎNG LỰC HÚT ---
+        // Càng gần tâm, tốc độ càng nhanh (Black hole effect)
+        const gravitySpeed = 2 + (200 / (dist + 10)); 
+
+        this.vx += Math.cos(angle) * 0.2;
+        this.vy += Math.sin(angle) * 0.2;
+
+        this.vx *= this.friction;
+        this.vy *= this.friction;
+
+        // Cập nhật vị trí
+        this.x += this.vx * gravitySpeed;
+        this.y += this.vy * gravitySpeed;
+
+        this.life--;
+
+        // LOGIC CHẾT HẠT:
+        // 1. Hết đời (life <= 0)
+        // 2. Bị hút vào quá sâu (dist < 5) -> Chạm vào tâm hố đen thì biến mất
+        // 3. Lỡ bay ra ngoài màn hình (hiếm)
+        if (this.life <= 0 || dist < 10 || this.x < -100 || this.x > width + 100 || this.y < -100 || this.y > height + 100) {
+            this.reset();
+        }
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = this.size;
+        // Vẽ vệt chuyển động
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.vx * 4, this.y - this.vy * 4); // Nhân hệ số để vệt dài hơn tạo cảm giác tốc độ
+        ctx.stroke();
+    }
+}
+
+function init() {
+    resize();
+    for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+    }
+}
+
+function animate() {
+    // Làm mờ chậm hơn một chút để vệt đuôi dài hơn (0.05 -> 0.08)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)'; 
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize', resize);
+
+init();
+animate();
+</script>
+</body>
+</html>
