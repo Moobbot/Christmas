@@ -222,11 +222,27 @@
             });
             canvas.addEventListener('touchend', () => { isDragging = false; });
 
-
+            initSnowImage(); // Pre-render snow
             initParticles();
             initSnow(); // Init snow
             initSnowFloor(); // Init Floor
             requestAnimationFrame(loop);
+        }
+
+        function initSnowImage() {
+            const size = 64;
+            const c = document.createElement('canvas');
+            c.width = size;
+            c.height = size;
+            const cCtx = c.getContext('2d');
+
+            cCtx.textAlign = 'center';
+            cCtx.textBaseline = 'middle';
+            cCtx.fillStyle = 'white';
+            cCtx.font = '50px sans-serif';
+            cCtx.fillText('❄', size / 2, size / 2 + 4); // Adjusted for vertical centering
+
+            snowImage = c;
         }
 
         function resize() {
@@ -442,10 +458,13 @@
 
                 if (proj) {
                     const alpha = 0.4 + 0.4 * Math.sin(now * 0.002 + s.phase);
-                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, s.size * proj.scale, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.globalAlpha = alpha;
+
+                    // Render Image Sprite (Optimized)
+                    const drawSize = s.size * proj.scale * 6;
+                    ctx.drawImage(snowImage, proj.x - drawSize / 2, proj.y - drawSize / 2, drawSize, drawSize);
+
+                    ctx.globalAlpha = 1.0;
                 }
             }
         }
@@ -460,10 +479,13 @@
                 const proj = project(r.x, r.y, r.z);
 
                 if (proj) {
-                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, p.size * proj.scale, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.globalAlpha = p.alpha;
+
+                    // Render Image Sprite
+                    const drawSize = p.size * proj.scale * 6;
+                    ctx.drawImage(snowImage, proj.x - drawSize / 2, proj.y - drawSize / 2, drawSize, drawSize);
+
+                    ctx.globalAlpha = 1.0;
                 }
             }
         }
@@ -495,9 +517,9 @@
                     const size = p.size * proj.scale;
 
                     ctx.fillStyle = p.color + alphaBase + ')';
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
-                    ctx.fill();
+
+                    // Optimized: fillRect instead of arc
+                    ctx.fillRect(proj.x - size / 2, proj.y - size / 2, size, size);
                 }
             }
         }
