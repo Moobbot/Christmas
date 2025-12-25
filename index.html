@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Christmas Collections 🎄</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Poppins:wght@400;600&display=swap');
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0f0c29;
+      background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      font-family: 'Poppins', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    h1 {
+      font-family: 'Mountains of Christmas', cursive;
+      font-size: 4rem;
+      margin-top: 50px;
+      margin-bottom: 10px;
+      text-shadow: 0 0 10px #ff00de, 0 0 20px #ff00de;
+      text-align: center;
+    }
+
+    p.subtitle {
+      font-size: 1.2rem;
+      margin-bottom: 50px;
+      color: #ccc;
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+      max-width: 1200px;
+      padding: 20px;
+      z-index: 10;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      width: 300px;
+      padding: 30px;
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+      text-decoration: none;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .card h2 {
+      font-size: 2.5rem;
+      margin: 0 0 15px;
+      font-family: 'Mountains of Christmas', cursive;
+    }
+
+    .card p {
+      font-size: 1rem;
+      line-height: 1.5;
+      color: #ddd;
+    }
+
+    .card .icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 15px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+
+    .badge.new {
+      background: #ff0a54;
+      color: white;
+      box-shadow: 0 0 10px #ff0a54;
+    }
+
+    .badge.old {
+      background: #444;
+      color: #aaa;
+    }
+
+    /* Snowflake Animation */
+    .snowflake {
+      position: fixed;
+      top: -10px;
+      color: #fff;
+      font-size: 1em;
+      font-family: Arial;
+      text-shadow: 0 0 1px #000;
+      user-select: none;
+      z-index: 1;
+      pointer-events: none;
+      animation: fall linear forwards;
+    }
+
+    @keyframes fall {
+      to {
+        transform: translateY(100vh);
+      }
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Christmas Collections</h1>
+  <p class="subtitle">A journey through holiday codes & memories</p>
+
+  <div class="container">
+    <!-- 2025 -->
+    <a href="christmas_2025/index.html" class="card">
+      <span class="icon">🎄</span>
+      <h2>2025</h2>
+      <p>3D Galaxy Heart with Interactive Particle System & Text Morph.</p>
+      <span class="badge new">LATEST</span>
+    </a>
+
+    <!-- 2024 -->
+    <a href="christmas_2024/index.html" class="card">
+      <span class="icon">🎅</span>
+      <h2>2024</h2>
+      <p>Interactive Christmas Card & Falling Snow Effects.</p>
+      <span class="badge old">ARCHIVE</span>
+    </a>
+
+    <!-- 2023 -->
+    <a href="christmas_2023/index.html" class="card">
+      <span class="icon">🎁</span>
+      <h2>2023</h2>
+      <p>Classic Holiday Animations & Memories.</p>
+      <span class="badge old">ARCHIVE</span>
+    </a>
+  </div>
+
+  <footer>
+    &copy; 2025 Created by <a style="color: #fff;" href="https://www.facebook.com/TamNgoMb/">NgoTam</a> ❤️
+  </footer>
+
+  <script>
+    // Simple Snow Script for Background
+    function createSnow() {
+      const snowflake = document.createElement('div');
+      snowflake.innerHTML = '❄';
+      snowflake.classList.add('snowflake');
+
+      snowflake.style.left = Math.random() * window.innerWidth + 'px';
+      snowflake.style.opacity = Math.random();
+      snowflake.style.fontSize = (Math.random() * 10 + 10) + 'px';
+
+      const duration = Math.random() * 5 + 5;
+      snowflake.style.animationDuration = duration + 's';
+
+      document.body.appendChild(snowflake);
+
+      setTimeout(() => {
+        snowflake.remove();
+      }, duration * 1000);
+    }
+
+    setInterval(createSnow, 200);
+  </script>
+</body>
+</html>
