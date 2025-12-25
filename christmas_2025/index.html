@@ -4,169 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Christmas 2025 - 6 Intersecting Hearts</title>
-    <style>
-        @font-face {
-            font-family: 'Satisfy';
-            src: url('../fonts/Satisfy/Satisfy-Regular.ttf') format('truetype');
-        }
-
-        @font-face {
-            font-family: 'Quicksand';
-            src: url('../fonts/Quicksand/Quicksand-VariableFont_wght.ttf') format('truetype');
-        }
-
-        body {
-            margin: 0;
-            background-color: #050510;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #ddd;
-            font-family: monospace;
-        }
-
-        canvas {
-            background: #000;
-            display: block;
-        }
-
-        #debug {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #fff;
-            font-family: monospace;
-            z-index: 10;
-        }
-
-        /* Image Container (Centered, floating) */
-        #image-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            /* transform: translate(-50%, -50%); - moved to img */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            pointer-events: none;
-            /* Let mouse pass through to canvas for coords */
-        }
-
-        #displayed-image {
-            max-width: 400px;
-            max-height: 400px;
-            border: 5px solid #fff;
-            box-shadow: 0 0 50px rgba(255, 255, 255, 0.8);
-            border-radius: 15px;
-
-            /* Hidden state */
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* Bouncy pop */
-        }
-
-        /* Visible state class */
-        #displayed-image.visible {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        /* --- POPUP MODAL CSS --- */
-        #popup-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 999;
-            display: none;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .popup-content {
-            background: rgba(20, 20, 35, 0.95);
-            padding: 30px;
-            border-radius: 15px;
-            border: 1px solid #ff0a54;
-            color: #eee;
-            max-width: 450px;
-            width: 90%;
-            box-shadow: 0 0 50px rgba(255, 10, 84, 0.3);
-            font-family: 'Quicksand', sans-serif;
-            position: relative;
-            animation: popIn 0.3s ease-out;
-        }
-
-        @keyframes popIn {
-            from {
-                transform: scale(0.8);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        .popup-content h2 {
-            color: #ff0a54;
-            text-align: center;
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-family: 'Satisfy', cursive;
-            font-size: 2.2em;
-            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-        }
-
-        .popup-content ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        .popup-content li {
-            margin-bottom: 12px;
-            font-size: 1.1em;
-            line-height: 1.5;
-            padding-left: 25px;
-            position: relative;
-        }
-
-        /* Bullet points as emojis or styled */
-        .popup-content li::before {
-            content: '🎁';
-            position: absolute;
-            left: 0;
-            top: 2px;
-            font-size: 0.9em;
-        }
-
-        button#btn-close {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(45deg, #ff0a54, #ff5c8a);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 20px;
-            font-weight: bold;
-        }
-
-        button#btn-close:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 10, 84, 0.4);
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="debug">FPS: 60<br>Mode: 6 Intersecting Planes</div>
@@ -218,19 +56,54 @@
         let snowflakes = []; // RESTORED
         // let snowFloor = []; // REMOVED
         let galaxyParticles = []; // NEW: Galaxy Floor
-        const GALAXY_COUNT = 2500;
+        const GALAXY_COUNT = 5000;
         const GALAXY_COLORS = ['#0f0c29', '#302b63', '#24243e', '#00d2ff', '#3a7bd5', '#ffffff'];
 
         let accumulatedSnow = []; // Keep for falling snow sticking? Or remove? User said "replace snow floor".
         // I will keep accumulatedSnow as it adds interaction, but maybe disable "Snow Floor" static.
         const MAX_ACCUMULATED = 10000;
         let shapeParticles = [];
+
+        let textTargets = []; // NEW: Targets for "I Love You"
+        let isTextMode = false;
+        let isFloorReturning = false;
+
         let startTime = 0;
         let lastTime = 0;
 
         let snowImage;
 
         // ...
+
+        function initTextTargets() {
+            const tCanvas = document.createElement('canvas');
+            const tCtx = tCanvas.getContext('2d');
+            tCanvas.width = 1000;
+            tCanvas.height = 300;
+
+            tCtx.font = 'bold 120px "Satisfy", "Quicksand", sans-serif';
+            tCtx.fillStyle = '#fff';
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            tCtx.fillText('I Love You', tCanvas.width / 2, tCanvas.height / 2);
+
+            const data = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height).data;
+            textTargets = [];
+
+            const step = 4;
+            for (let y = 0; y < tCanvas.height; y += step) {
+                for (let x = 0; x < tCanvas.width; x += step) {
+                    const idx = (y * tCanvas.width + x) * 4;
+                    if (data[idx + 3] > 128) {
+                        textTargets.push({
+                            x: (x - tCanvas.width / 2) * 2.5, // Scale up
+                            y: (y - tCanvas.height / 2) * 2.5 - 600, // Move UP (-600 above heart)
+                            z: 0
+                        });
+                    }
+                }
+            }
+        }
 
         function initGalaxyFloor() {
             galaxyParticles = [];
@@ -274,53 +147,86 @@
             for (let i = 0; i < galaxyParticles.length; i++) {
                 let p = galaxyParticles[i];
 
-                // PHYSICS (Converted from 2D Ref to 3D XZ)
-                const dx = p.x; // Center is 0,0,0
-                const dz = p.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                const angleToCenter = Math.atan2(dz, dx);
+                // Determine Assignment (3-Stage Flow)
+                let t = null;
+                if (isTextMode && textTargets.length > 0) {
+                    if (!isFloorReturning) {
+                        t = textTargets[i % textTargets.length];
+                    } else if (i < textTargets.length) {
+                        t = textTargets[i];
+                    }
+                }
+                const isAssignedToText = !!t;
 
-                // Suction Logic
-                const suctionForce = 2.5;
-                const noise = Math.sin(dist * 0.02 - now * 0.002) * 0.5;
-                const angle = angleToCenter + Math.PI + 1.4 + noise;
-                const gravitySpeed = 2 + (200 / (dist + 10));
+                if (isAssignedToText) {
+                    // --- TEXT MODE (Assigned Particles) ---
+                    // t is determined above
+                    const speed = 0.04;
 
-                p.vx += Math.cos(angle) * 0.2;
-                p.vz += Math.sin(angle) * 0.2;
-                p.vx *= p.friction;
-                p.vz *= p.friction;
+                    p.x += (t.x - p.x) * speed;
+                    p.y += (t.y - p.y) * speed;
+                    p.z += (t.z - p.z) * speed;
 
-                p.x += p.vx * gravitySpeed;
-                p.z += p.vz * gravitySpeed;
-                p.life--;
+                    // Jitter
+                    p.x += (Math.random() - 0.5) * 5;
+                    p.y += (Math.random() - 0.5) * 5;
+                    p.z += (Math.random() - 0.5) * 5;
 
-                // Reset Logic
-                if (p.life <= 0 || dist < 10 || Math.abs(p.x) > 3000 || Math.abs(p.z) > 3000) {
-                    resetGalaxyParticle(p);
-                    continue;
+                } else {
+                    // --- GALAXY MODE (Remaining Particles) ---
+                    const dx = p.x;
+                    const dz = p.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    const angleToCenter = Math.atan2(dz, dx);
+
+                    const noise = Math.sin(dist * 0.02 - now * 0.002) * 0.5;
+                    const angle = angleToCenter + Math.PI + 0.7 + noise;
+                    const gravitySpeed = 3 + (250 / (dist + 10));
+
+                    p.vx += Math.cos(angle) * 0.2;
+                    p.vz += Math.sin(angle) * 0.2;
+                    p.vx *= p.friction;
+                    p.vz *= p.friction;
+
+                    p.x += p.vx * gravitySpeed;
+                    p.z += p.vz * gravitySpeed;
+                    p.life--;
+
+                    // Reset Logic
+                    if (p.life <= 0 || dist < 10 || Math.abs(p.x) > 3000 || Math.abs(p.z) > 3000) {
+                        resetGalaxyParticle(p);
+                        continue;
+                    }
                 }
 
                 // DRAW
-                // Current Pos
                 const r1 = applyCamera(p.x, p.y, p.z);
                 const proj1 = project(r1.x, r1.y, r1.z);
 
-                // Tail Pos (simulate motion blur)
-                const tailX = p.x - p.vx * 4;
-                const tailZ = p.z - p.vz * 4;
-                const r2 = applyCamera(tailX, p.y, tailZ);
-                const proj2 = project(r2.x, r2.y, r2.z);
-
-                if (proj1 && proj2) {
+                if (proj1) {
                     ctx.beginPath();
-                    ctx.strokeStyle = p.color; // Use sprite color? No, ref uses stroke.
-                    ctx.lineWidth = p.size * proj1.scale;
-                    // ctx.globalAlpha = 0.8; // Blend handled by drawBackground trail?
 
-                    ctx.moveTo(proj1.x, proj1.y);
-                    ctx.lineTo(proj2.x, proj2.y);
-                    ctx.stroke();
+                    if (isAssignedToText) {
+                        const size = p.size * proj1.scale * 3.0;
+                        const pulse = 0.8 + 0.2 * Math.sin(now * 0.005 + i); // Twinkle
+                        ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = 'rgba(255, 100, 150, 0.8)'; // Pink Glow
+                        ctx.fillRect(proj1.x - size / 2, proj1.y - size / 2, size, size);
+                        ctx.shadowBlur = 0; // Reset
+                    } else {
+                        const tailX = p.x - p.vx * 4;
+                        const tailZ = p.z - p.vz * 4;
+                        const r2 = applyCamera(tailX, p.y, tailZ);
+                        const proj2 = project(r2.x, r2.y, r2.z);
+                        if (proj2) {
+                            ctx.strokeStyle = p.color;
+                            ctx.lineWidth = p.size * proj1.scale;
+                            ctx.moveTo(proj1.x, proj1.y);
+                            ctx.lineTo(proj2.x, proj2.y);
+                            ctx.stroke();
+                        }
+                    }
                 }
             }
         }
@@ -518,6 +424,7 @@
             initShapeParticles(); // NEW SHAPE
             initSnow();
             initGalaxyFloor();
+            initTextTargets(); // Initialize Text Targets
             requestAnimationFrame(loop);
         }
 
@@ -780,6 +687,16 @@
             if (progress > 1) progress = 1;
             const ease = Math.pow(progress, 2.5);
 
+            // Trigger Text Morph after Hearts settle
+            if (now - startTime > 10000) {
+                isTextMode = true;
+            }
+
+            // Trigger Floor Return after Text sets (e.g. 8 seconds later)
+            if (now - startTime > 18000) {
+                isFloorReturning = true;
+            }
+
             // Render Steps
             drawBackground();
             updateAndDrawSnow(now);
@@ -814,8 +731,9 @@
 
                     // Accumulate?
                     if (accumulatedSnow.length < MAX_ACCUMULATED) {
-                        // Only if within reasonable radius (on the platform)
-                        if (Math.abs(s.x) < 400 && Math.abs(s.z) < 400) {
+                        // Circular and Wider (User request)
+                        // Radius 1000 instead of square 400
+                        if (Math.hypot(s.x, s.z) < 1000) {
                             accumulatedSnow.push({
                                 x: s.x,
                                 y: floorLevel + Math.random() * 10,
@@ -863,27 +781,6 @@
                     // Draw as simple rect for performance
                     const s = p.size * proj.scale;
                     ctx.fillRect(proj.x - s / 2, proj.y - s / 2, s, s);
-                }
-            }
-        }
-
-        function drawSnowFloor() {
-            for (let i = 0; i < snowFloor.length; i++) {
-                const p = snowFloor[i];
-
-                // Rotate
-                const r = applyCamera(p.x, p.y, p.z);
-                // Project
-                const proj = project(r.x, r.y, r.z);
-
-                if (proj) {
-                    ctx.globalAlpha = p.alpha;
-
-                    // Render Image Sprite
-                    const drawSize = p.size * proj.scale * 6;
-                    ctx.drawImage(snowImage, proj.x - drawSize / 2, proj.y - drawSize / 2, drawSize, drawSize);
-
-                    ctx.globalAlpha = 1.0;
                 }
             }
         }
@@ -968,7 +865,10 @@
             }
         }
 
-        init();
+        // Wait for fonts to load before starting to ensure textTargets can be generated
+        document.fonts.ready.then(function () {
+            init();
+        });
     </script>
 </body>
 </html>
