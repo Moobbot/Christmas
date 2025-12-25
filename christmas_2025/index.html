@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Christmas 2025 - 6 Intersecting Hearts</title>
     <style>
+        @font-face {
+            font-family: 'Satisfy';
+            src: url('../fonts/Satisfy/Satisfy-Regular.ttf') format('truetype');
+        }
+
+        @font-face {
+            font-family: 'Quicksand';
+            src: url('../fonts/Quicksand/Quicksand-VariableFont_wght.ttf') format('truetype');
+        }
+
         body {
             margin: 0;
             background-color: #050510;
@@ -34,9 +44,9 @@
         /* Image Container (Centered, floating) */
         #image-container {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 0;
+            left: 0;
+            /* transform: translate(-50%, -50%); - moved to img */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -54,7 +64,7 @@
 
             /* Hidden state */
             opacity: 0;
-            transform: scale(0);
+            transform: translate(-50%, -50%) scale(0);
             transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
             /* Bouncy pop */
         }
@@ -62,7 +72,99 @@
         /* Visible state class */
         #displayed-image.visible {
             opacity: 1;
-            transform: scale(1);
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* --- POPUP MODAL CSS --- */
+        #popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .popup-content {
+            background: rgba(20, 20, 35, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #ff0a54;
+            color: #eee;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 0 50px rgba(255, 10, 84, 0.3);
+            font-family: 'Quicksand', sans-serif;
+            position: relative;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .popup-content h2 {
+            color: #ff0a54;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-family: 'Satisfy', cursive;
+            font-size: 2.2em;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .popup-content ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .popup-content li {
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            line-height: 1.5;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        /* Bullet points as emojis or styled */
+        .popup-content li::before {
+            content: '🎁';
+            position: absolute;
+            left: 0;
+            top: 2px;
+            font-size: 0.9em;
+        }
+
+        button#btn-close {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(45deg, #ff0a54, #ff5c8a);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        button#btn-close:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 10, 84, 0.4);
         }
     </style>
 </head>
@@ -72,6 +174,21 @@
     <!-- Image Container -->
     <div id="image-container">
         <img id="displayed-image" src="" alt="Christmas Memory">
+    </div>
+
+    <!-- POPUP OVERLAY (Instruction Modal) -->
+    <div id="popup-overlay">
+        <div class="popup-content">
+            <h2>🎄 Hướng Dẫn Sử Dụng 🎄</h2>
+            <ul>
+                <li><strong>Chuột trái (Giữ & Kéo):</strong> Xoay lật camera (360 độ).</li>
+                <li><strong>Chuột phải (Giữ & Kéo):</strong> Di chuyển khung hình (Pan).</li>
+                <li><strong>Lăn chuột:</strong> Phóng to / Thu nhỏ.</li>
+                <li><strong>Click vào Trái Tim:</strong> Xem ảnh kỷ niệm.</li>
+            </ul>
+            <p style="text-align: center; margin-top: 20px;">Chúc bé một mùa Giáng Sinh an lành! ❤️</p>
+            <button id="btn-close">Đã hiểu</button>
+        </div>
     </div>
 
     <script>
@@ -100,6 +217,8 @@
         let particles = [];
         let snowflakes = [];
         let snowFloor = [];
+        let accumulatedSnow = []; // NEW: Snow accumulation
+        const MAX_ACCUMULATED = 10000; // Max accumulated particles
         let shapeParticles = []; // NEW SHAPE
         let startTime = 0;
         let lastTime = 0;
@@ -110,9 +229,12 @@
         let camAngleY = 0;
         let camAngleX = 0;
         let camZ = 2500; // Distance (Zoom)
+        let camPanX = 0;
+        let camPanY = 0;
 
         // Interaction State
         let isDragging = false;
+        let isPanning = false; // New Panning State
         let lastMouseX = 0;
         let lastMouseY = 0;
         let dragStartX = 0;
@@ -140,57 +262,108 @@
             window.addEventListener('resize', resize);
             resize();
 
+            // Prevent Context Menu on Right Click
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+
             // MOUSE EVENTS
             canvas.addEventListener('mousedown', (e) => {
-                isDragging = true;
+                if (e.button === 2) {
+                    isPanning = true;
+                } else {
+                    // Check Base Click (Popup Trigger)
+                    const baseR = applyCamera(0, 500, 0); // Center of "Mirror Platform"
+                    const baseProj = project(baseR.x, baseR.y, baseR.z);
+                    if (baseProj) {
+                        const dist = Math.hypot(e.clientX - baseProj.x, e.clientY - baseProj.y);
+                        // Hitbox size (scaled or fixed? fixed is easier to hit)
+                        if (dist < 150 * baseProj.scale) {
+                            // OPEN POPUP
+                            const overlay = document.getElementById('popup-overlay');
+                            overlay.style.display = 'flex';
+                            return; // Don't drag if clicked on base
+                        }
+                    }
+
+                    isDragging = true;
+                }
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
                 dragStartX = e.clientX;
                 dragStartY = e.clientY;
             });
 
+            // --- POPUP MODAL LOGIC ---
+            const overlay = document.getElementById('popup-overlay');
+            const btnClose = document.getElementById('btn-close');
+
+            // Close Button
+            if (btnClose) {
+                btnClose.addEventListener('click', () => {
+                    overlay.style.display = 'none';
+                });
+            }
+
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                }
+            });
+
             window.addEventListener('mousemove', (e) => {
-                // 1. Handle Dragging (Rotate)
-                if (isDragging) {
-                    const deltaX = e.clientX - lastMouseX;
-                    const deltaY = e.clientY - lastMouseY;
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
 
-                    camAngleY += deltaX * 0.005; // Yaw
-                    camAngleX += deltaY * 0.005; // Pitch
-
-                    // Clamp Pitch to avoid flipping upside down
-                    camAngleX = Math.max(-0.5, Math.min(0.5, camAngleX));
-
+                // 0. Handle Panning (Right Click)
+                if (isPanning) {
+                    camPanX += deltaX;
+                    camPanY += deltaY;
                     lastMouseX = e.clientX;
                     lastMouseY = e.clientY;
-                    return; // Skip hover logic while dragging
+                    return;
+                }
+
+                // 1. Handle Dragging (Left Click - Rotate)
+                if (isDragging) {
+                    camAngleY += deltaX * 0.005;
+                    camAngleX += deltaY * 0.005;
+                    camAngleX = Math.max(-0.5, Math.min(0.5, camAngleX));
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                    return;
                 }
 
                 // 2. Handle Hover (Image Zoom)
-                const cx = window.innerWidth / 2;
-                const cy = window.innerHeight / 2;
-                const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
-                const img = document.getElementById('displayed-image');
+                // Calculate Screen Position of the Heart Center (0,0,0) in 3D
+                const r = applyCamera(0, 0, 0);
+                const proj = project(r.x, r.y, r.z);
 
-                if (dist < 100) {
-                    if (!isHovering) {
-                        isHovering = true;
-                        const randIndex = Math.floor(Math.random() * IMAGES.length);
-                        img.src = IMAGES[randIndex];
-                        img.classList.add('visible');
-                    }
-                } else {
-                    if (isHovering) {
-                        isHovering = false;
-                        img.classList.remove('visible');
+                if (proj) {
+                    const dist = Math.hypot(e.clientX - proj.x, e.clientY - proj.y);
+                    const img = document.getElementById('displayed-image');
+
+                    if (dist < 100 * proj.scale) { // Scale hit area with zoom? Or keep fixed? Fixed 100 is easier to hit.
+                        // Let's scale it slightly so it doesn't get tiny when zoomed out, 
+                        // but maybe clamp it. 
+                        // actually 100px radius is fine for interactions.
+                        if (!isHovering) {
+                            isHovering = true;
+                            const randIndex = Math.floor(Math.random() * IMAGES.length);
+                            img.src = IMAGES[randIndex];
+                            img.classList.add('visible');
+                        }
+                    } else {
+                        if (isHovering) {
+                            isHovering = false;
+                            img.classList.remove('visible');
+                        }
                     }
                 }
             });
 
             window.addEventListener('mouseup', (e) => {
-                if (!isDragging) return;
                 isDragging = false;
-
+                isPanning = false;
                 // Check for Click (if dragged less than 5px)
                 const distMoved = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
                 /*
@@ -476,8 +649,8 @@
             if (contextZ <= 0) return null;
             const scale = CONFIG.FOCAL_LENGTH / contextZ;
             return {
-                x: x * scale + CONFIG.WIDTH / 2,
-                y: y * scale + CONFIG.HEIGHT / 2,
+                x: x * scale + CONFIG.WIDTH / 2 + camPanX, // Add Pan X
+                y: y * scale + CONFIG.HEIGHT / 2 + camPanY, // Add Pan Y
                 scale: scale,
                 z: z
             };
@@ -505,6 +678,7 @@
             drawBackground();
             updateAndDrawSnow(now);
             drawShapeParticles(now); // Draw New Shape
+            drawAccumulatedSnow(now); // Draw Accumulated Snow
             drawSnowFloor();
             updateAndDrawParticles(now, ease);
             drawCenterGlow();
@@ -518,6 +692,8 @@
         }
 
         function updateAndDrawSnow(now) {
+            const floorLevel = 500; // Match Mirror Platform height
+
             for (let i = 0; i < snowflakes.length; i++) {
                 const s = snowflakes[i];
 
@@ -525,10 +701,26 @@
                 s.y += s.vy;
                 s.x += Math.sin(now * 0.001 + s.phase) * 0.5;
 
-                // Reset
-                const resetY = 1000;
-                if (s.y > resetY) {
-                    s.y = -resetY;
+                // Check Collisions / Reset
+                if (s.y > floorLevel) {
+
+                    // Accumulate?
+                    if (accumulatedSnow.length < MAX_ACCUMULATED) {
+                        // Only if within reasonable radius (on the platform)
+                        if (Math.abs(s.x) < 400 && Math.abs(s.z) < 400) {
+                            accumulatedSnow.push({
+                                x: s.x,
+                                y: floorLevel + Math.random() * 10,
+                                z: s.z,
+                                color: 'rgba(255, 255, 255, ',
+                                alpha: 0.5 + Math.random() * 0.3,
+                                size: s.size * 1.2
+                            });
+                        }
+                    }
+
+                    // Reset to top
+                    s.y = -1000;
                     s.x = (Math.random() - 0.5) * 2000;
                     s.z = (Math.random() - 0.5) * 2000;
                 }
@@ -546,6 +738,23 @@
                     ctx.drawImage(snowImage, proj.x - drawSize / 2, proj.y - drawSize / 2, drawSize, drawSize);
 
                     ctx.globalAlpha = 1.0;
+                }
+            }
+        }
+
+        function drawAccumulatedSnow(now) {
+            for (let i = 0; i < accumulatedSnow.length; i++) {
+                const p = accumulatedSnow[i];
+
+                // Apply Camera
+                const r = applyCamera(p.x, p.y, p.z);
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    ctx.fillStyle = p.color + p.alpha + ')';
+                    // Draw as simple rect for performance
+                    const s = p.size * proj.scale;
+                    ctx.fillRect(proj.x - s / 2, proj.y - s / 2, s, s);
                 }
             }
         }
@@ -607,6 +816,8 @@
 
         function drawCenterGlow() {
             const centerProj = project(0, 0, 0);
+            const container = document.getElementById('image-container');
+
             if (centerProj) {
                 // Glow tâm
                 const grad = ctx.createRadialGradient(centerProj.x, centerProj.y, 0, centerProj.x, centerProj.y, 30 * centerProj.scale);
@@ -617,6 +828,14 @@
                 ctx.beginPath();
                 ctx.arc(centerProj.x, centerProj.y, 30 * centerProj.scale, 0, Math.PI * 2);
                 ctx.fill();
+
+                // UPDATE IMAGE POSITION
+                // Move the container to the projected center
+                container.style.left = centerProj.x + 'px';
+                container.style.top = centerProj.y + 'px';
+                container.style.display = 'flex';
+            } else {
+                if (container) container.style.display = 'none';
             }
         }
 
