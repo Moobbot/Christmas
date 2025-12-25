@@ -80,7 +80,7 @@
             WIDTH: 1080,
             HEIGHT: 1920,
             PARTICLES: 12000, // Số lượng hạt
-            HEART_COUNT: 6,   // 6 trái tim
+            HEART_COUNT: 8,   // 8 trái tim
             HEART_SIZE: 15,   // Kích thước
             SNOW_COUNT: 800,  // Số lượng tuyết
             SNOW_FLOOR_COUNT: 1000,
@@ -101,18 +101,29 @@
         let snowFloor = []; // Floor particles
         let startTime = 0;
         let lastTime = 0;
-        let camAngleY = 0; // Góc quay camera toàn cảnh
 
-        let isHovering = false; // Track hover state
+        // Camera State
+        let camAngleY = 0;
+        let camAngleX = 0; // Pitch (Tilt)
 
-        // Màu cho 6 trái tim để dễ phân biệt (hoặc dùng 1 màu nếu thích)
+        // Interaction State
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let isHovering = false;
+
+        // Màu cho 8 trái tim
         const PALETTE = [
             'hsla(0, 100%, 60%, ',   // Đỏ
             'hsla(30, 100%, 60%, ',  // Cam
             'hsla(60, 100%, 60%, ',  // Vàng
             'hsla(120, 100%, 60%, ', // Xanh lá
+            'hsla(160, 100%, 60%, ', // Cyan
             'hsla(200, 100%, 60%, ', // Xanh dương
-            'hsla(300, 100%, 60%, '  // Tím
+            'hsla(300, 100%, 60%, ', // Tím
+            'hsla(330, 100%, 60%, '  // Hồng
         ];
 
         // --- INIT ---
@@ -124,32 +135,93 @@
             window.addEventListener('resize', resize);
             resize();
 
-            // Hover Interaction (MouseMove)
+            // MOUSE EVENTS
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+            });
+
             window.addEventListener('mousemove', (e) => {
+                // 1. Handle Dragging (Rotate)
+                if (isDragging) {
+                    const deltaX = e.clientX - lastMouseX;
+                    const deltaY = e.clientY - lastMouseY;
+
+                    camAngleY += deltaX * 0.005; // Yaw
+                    camAngleX += deltaY * 0.005; // Pitch
+
+                    // Clamp Pitch to avoid flipping upside down
+                    camAngleX = Math.max(-0.5, Math.min(0.5, camAngleX));
+
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                    return; // Skip hover logic while dragging
+                }
+
+                // 2. Handle Hover (Image Zoom)
                 const cx = window.innerWidth / 2;
                 const cy = window.innerHeight / 2;
                 const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
-
                 const img = document.getElementById('displayed-image');
 
-                // Radius of sensitivity
                 if (dist < 100) {
                     if (!isHovering) {
-                        // Enter Hover
                         isHovering = true;
-                        // Pick random image only on new enter
                         const randIndex = Math.floor(Math.random() * IMAGES.length);
                         img.src = IMAGES[randIndex];
                         img.classList.add('visible');
                     }
                 } else {
                     if (isHovering) {
-                        // Leave Hover
                         isHovering = false;
                         img.classList.remove('visible');
                     }
                 }
             });
+
+            window.addEventListener('mouseup', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+
+                // Check for Click (if dragged less than 5px)
+                const distMoved = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+                /* 
+                if (distMoved < 5) {
+                    // Was a click. Check center?
+                    // Already handled by Hover logic essentially.
+                    // But if we want explicit click action:
+                    // const rect = canvas.getBoundingClientRect();
+                    // const cx = CONFIG.WIDTH / 2; ...
+                    // if (distCenter < 100) ...
+                }
+                */
+            });
+
+            // Touch Support (Basic)
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    lastMouseX = e.touches[0].clientX;
+                    lastMouseY = e.touches[0].clientY;
+                }
+            });
+            canvas.addEventListener('touchmove', (e) => {
+                if (isDragging && e.touches.length === 1) {
+                    const deltaX = e.touches[0].clientX - lastMouseX;
+                    const deltaY = e.touches[0].clientY - lastMouseY;
+                    camAngleY += deltaX * 0.005;
+                    camAngleX += deltaY * 0.005;
+                    camAngleX = Math.max(-0.5, Math.min(0.5, camAngleX));
+                    lastMouseX = e.touches[0].clientX;
+                    lastMouseY = e.touches[0].clientY;
+                    e.preventDefault(); // Stop scroll
+                }
+            });
+            canvas.addEventListener('touchend', () => { isDragging = false; });
+
 
             initParticles();
             initSnow(); // Init snow
@@ -219,7 +291,7 @@
                 const p = snowFloor[i];
 
                 // Rotate
-                const r = rotateY(p.x, p.y, p.z, camAngleY);
+                const r = applyCamera(p.x, p.y, p.z);
                 // Project
                 const proj = project(r.x, r.y, r.z);
 
@@ -282,7 +354,27 @@
             };
         }
 
+        function rotateX(x, y, z, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: x,
+                y: y * cos - z * sin,
+                z: y * sin + z * cos
+            };
+        }
+
+        // Helper to apply full camera rotation
+        function applyCamera(x, y, z) {
+            // 1. Rotate Y (Yaw)
+            let r = rotateY(x, y, z, camAngleY);
+            // 2. Rotate X (Pitch)
+            r = rotateX(r.x, r.y, r.z, camAngleX);
+            return r;
+        }
+
         function project(x, y, z) {
+            // Use projection directly from transformed coords
             const zOffset = 1000;
             const contextZ = z + zOffset;
             if (contextZ <= 0) return null;
@@ -302,8 +394,10 @@
             const dt = (now - lastTime) / 1000;
             lastTime = now;
 
-            // Update Global State
-            camAngleY += 0.005;
+            // Auto-Rotate ONLY if not dragging
+            if (!isDragging) {
+                camAngleY += 0.002; // Slower auto rotate
+            }
 
             // Calculate Animation Progress
             const convergeDuration = 7000;
@@ -343,7 +437,7 @@
                 }
 
                 // 3D Projection
-                const r = rotateY(s.x, s.y, s.z, camAngleY);
+                const r = applyCamera(s.x, s.y, s.z);
                 const proj = project(r.x, r.y, r.z);
 
                 if (proj) {
@@ -351,6 +445,24 @@
                     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
                     ctx.beginPath();
                     ctx.arc(proj.x, proj.y, s.size * proj.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function drawSnowFloor() {
+            for (let i = 0; i < snowFloor.length; i++) {
+                const p = snowFloor[i];
+
+                // Rotate
+                const r = applyCamera(p.x, p.y, p.z);
+                // Project
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, p.size * proj.scale, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
@@ -367,15 +479,15 @@
                 const finalYy = p.targetY * breathingScale;
                 const finalZz = p.targetZ * breathingScale;
 
-                // Interpolate: Start -> Final based on Ease
+                // Interpolate
                 p.x = p.startX + (finalXx - p.startX) * ease;
                 p.y = p.startY + (finalYy - p.startY) * ease;
                 p.z = p.startZ + (finalZz - p.startZ) * ease;
 
-                // 1. Xoay theo Camera
-                const r = rotateY(p.x, p.y, p.z, camAngleY);
+                // 1. Apply Camera (Y then X)
+                const r = applyCamera(p.x, p.y, p.z);
 
-                // 2. Project lên màn hình 2D
+                // 2. Project
                 const proj = project(r.x, r.y, r.z);
 
                 if (proj) {
