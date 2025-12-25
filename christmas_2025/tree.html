@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cây Thông 3D - Phiên bản Fix Lỗi</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-family: Arial, sans-serif;
+      pointer-events: none;
+      font-size: 1.2rem;
+      transition: opacity 0.5s;
+    }
+
+    .instruction {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      font-family: sans-serif;
+      pointer-events: none;
+      select: none;
+      text-shadow: 0 0 5px #000;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="loading">Đang tải tài nguyên... vui lòng chờ 3s</div>
+  <div class="instruction">Giữ chuột trái để XOAY | Lăn chuột để ZOOM</div>
+
+  <script>
+    // Kiểm tra xem thư viện đã tải chưa
+    window.onload = function () {
+      if (typeof THREE === 'undefined') {
+        document.getElementById('loading').innerHTML = "Lỗi kết nối mạng! Không tải được thư viện Three.js.<br>Vui lòng kiểm tra Internet.";
+        return;
+      }
+      init();
+    };
+
+    function init() {
+      // Ẩn loading
+      const loadingEl = document.getElementById('loading');
+      loadingEl.style.opacity = 0;
+      setTimeout(() => loadingEl.style.display = 'none', 500);
+
+      // 1. KHỞI TẠO SCENE
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x050510);
+      scene.fog = new THREE.FogExp2(0x050510, 0.002);
+
+      // 2. CAMERA
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 30, 60);
+
+      // 3. RENDERER
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      // 4. CONTROLS (Dùng biến toàn cục THREE.OrbitControls)
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 1.0;
+
+      // 5. ÁNH SÁNG
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambientLight);
+
+      const pointLight = new THREE.PointLight(0xffd700, 1.2, 100);
+      pointLight.position.set(20, 30, 20);
+      pointLight.castShadow = true;
+      scene.add(pointLight);
+
+      // 6. TẠO CÂY THÔNG
+      const treeGroup = new THREE.Group();
+
+      // Vật liệu lá
+      const leafMaterial = new THREE.MeshStandardMaterial({
+        color: 0x0f5f0f,
+        roughness: 0.8,
+        flatShading: true
+      });
+
+      // Các tầng lá
+      const layers = 5;
+      for (let i = 0; i < layers; i++) {
+        const radius = 12 - i * 2.2;
+        const height = 9;
+        const coneGeo = new THREE.ConeGeometry(radius, height, 12); // Low poly
+        const cone = new THREE.Mesh(coneGeo, leafMaterial);
+
+        cone.position.y = i * 5 + 6;
+        cone.castShadow = true;
+        cone.receiveShadow = true;
+        treeGroup.add(cone);
+
+        // Thêm quả châu
+        addBaubles(cone.position.y, radius, i, treeGroup);
+      }
+
+      // Thân cây
+      const trunkGeo = new THREE.CylinderGeometry(2.5, 3, 12, 8);
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817 });
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = 1;
+      trunk.castShadow = true;
+      treeGroup.add(trunk);
+
+      // Ngôi sao
+      const starGeo = new THREE.OctahedronGeometry(2.5, 0);
+      const starMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const star = new THREE.Mesh(starGeo, starMat);
+      star.position.y = layers * 5 + 7;
+      treeGroup.add(star);
+
+      scene.add(treeGroup);
+
+      // 7. SÀN TUYẾT
+      const groundGeo = new THREE.PlaneGeometry(300, 300);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -4;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // 8. TUYẾT RƠI (Hạt)
+      const snowGeo = new THREE.BufferGeometry();
+      const snowCount = 2000;
+      const positions = [];
+
+      for (let i = 0; i < snowCount; i++) {
+        positions.push(
+          (Math.random() - 0.5) * 150, // x
+          (Math.random() - 0.5) * 100 + 50, // y (trên cao)
+          (Math.random() - 0.5) * 150  // z
+        );
+      }
+
+      snowGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const snowMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.4,
+        transparent: true,
+        opacity: 0.8
+      });
+      const snowSystem = new THREE.Points(snowGeo, snowMat);
+      scene.add(snowSystem);
+
+      // 9. ANIMATION LOOP
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+
+        // Xoay sao
+        star.rotation.y -= 0.02;
+
+        // Tuyết rơi
+        const positions = snowSystem.geometry.attributes.position.array;
+        for (let i = 1; i < positions.length; i += 3) {
+          positions[i] -= 0.15; // Tốc độ rơi
+          if (positions[i] < -4) {
+            positions[i] = 80; // Quay lại trên trời
+          }
+        }
+        snowSystem.geometry.attributes.position.needsUpdate = true;
+
+        renderer.render(scene, camera);
+      }
+
+      // Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      animate();
+    }
+
+    function addBaubles(y, radius, layerIndex, group) {
+      const count = 5 + layerIndex * 2;
+      const colors = [0xff0000, 0xffff00, 0x00ffff, 0xff00ff];
+      const geo = new THREE.SphereGeometry(0.7, 16, 16);
+
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + layerIndex;
+        const mat = new THREE.MeshStandardMaterial({ color: colors[i % colors.length], roughness: 0.2, metalness: 0.5 });
+        const mesh = new THREE.Mesh(geo, mat);
+
+        mesh.position.set(
+          Math.cos(angle) * (radius - 0.5),
+          y - 3,
+          Math.sin(angle) * (radius - 0.5)
+        );
+        group.add(mesh);
+      }
+    }
+  </script>
+</body>
+</html>
