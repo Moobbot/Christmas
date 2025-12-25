@@ -79,11 +79,12 @@
         const CONFIG = {
             WIDTH: 1080,
             HEIGHT: 1920,
-            PARTICLES: 12000, // Số lượng hạt
+            PARTICLES: 20000, // Số lượng hạt
             HEART_COUNT: 8,   // 8 trái tim
             HEART_SIZE: 15,   // Kích thước
             SNOW_COUNT: 800,  // Số lượng tuyết
             SNOW_FLOOR_COUNT: 1000,
+            SHAPE_PARTICLES: 4000,
             FPS_UPDATE_INTERVAL: 500,
             FOCAL_LENGTH: 800
         };
@@ -97,14 +98,18 @@
         // --- STATE ---
         let canvas, ctx;
         let particles = [];
-        let snowflakes = []; // Array for snow
-        let snowFloor = []; // Floor particles
+        let snowflakes = [];
+        let snowFloor = [];
+        let shapeParticles = []; // NEW SHAPE
         let startTime = 0;
         let lastTime = 0;
 
+        let snowImage;
+
         // Camera State
         let camAngleY = 0;
-        let camAngleX = 0; // Pitch (Tilt)
+        let camAngleX = 0;
+        let camZ = 2500; // Distance (Zoom)
 
         // Interaction State
         let isDragging = false;
@@ -188,7 +193,7 @@
 
                 // Check for Click (if dragged less than 5px)
                 const distMoved = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
-                /* 
+                /*
                 if (distMoved < 5) {
                     // Was a click. Check center?
                     // Already handled by Hover logic essentially.
@@ -199,6 +204,13 @@
                 }
                 */
             });
+
+            // ZOOM (Mouse Wheel)
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                camZ += e.deltaY * 2; // Sensitivity
+                camZ = Math.max(200, Math.min(6000, camZ)); // Clamp
+            }, { passive: false });
 
             // Touch Support (Basic)
             canvas.addEventListener('touchstart', (e) => {
@@ -222,10 +234,11 @@
             });
             canvas.addEventListener('touchend', () => { isDragging = false; });
 
-            initSnowImage(); // Pre-render snow
+            initSnowImage();
             initParticles();
-            initSnow(); // Init snow
-            initSnowFloor(); // Init Floor
+            initShapeParticles(); // NEW SHAPE
+            initSnow();
+            initSnowFloor();
             requestAnimationFrame(loop);
         }
 
@@ -245,9 +258,73 @@
             snowImage = c;
         }
 
+        function initShapeParticles() {
+            shapeParticles = [];
+            const R = 300;
+            const r = 60;
+            const centerY = 500;
+
+            // Dense Grid: 'Thẳng hàng' & 'Dày đặc'
+            const stepU = Math.PI * 2 / 120; // ~120 steps around
+            const stepV = 4 * Math.PI / 120; // ~120 steps vertical
+
+            for (let u = 0; u < Math.PI * 2; u += stepU) {
+                for (let v = -2 * Math.PI; v < 2 * Math.PI; v += stepV) {
+
+                    const factor = (R - r - Math.sin(v));
+                    const x_raw = factor * Math.cos(u) * Math.cos(v);
+                    const z_raw = factor * Math.sin(u) * Math.cos(v);
+                    const y_raw = 3 * r * Math.sin(v / 2);
+
+                    const x = x_raw;
+                    const y = y_raw + centerY;
+                    const z = z_raw;
+
+                    shapeParticles.push({
+                        x, y, z,
+                        // Less random color, more uniform or gradient? 
+                        // User said "vẽ các điểm sáng thẳng hàng" -> cleaner look
+                        color: `hsla(${(u / (Math.PI * 2)) * 360}, 80%, 70%, `, // Rainbow along U
+                        phase: v, // Wave along V
+                        size: 1.0 // Uniform size for cleaner lines
+                    });
+                }
+            }
+        }
+
+        function drawShapeParticles(now) {
+            for (let i = 0; i < shapeParticles.length; i++) {
+                const p = shapeParticles[i];
+
+                // Twinkle
+                const alpha = 0.5 + 0.5 * Math.sin(now * 0.003 + p.phase);
+
+                // Rotate
+                const r = applyCamera(p.x, p.y, p.z);
+                // Project
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    ctx.fillStyle = p.color + alpha + ')';
+                    ctx.fillRect(proj.x, proj.y, p.size * proj.scale, p.size * proj.scale);
+                }
+            }
+        }
+
         function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+
+            // Set actual size (high res)
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+
+            // Set visible size (css)
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+
+            // Scale context to match logical coords
+            ctx.scale(dpr, dpr);
+
             CONFIG.WIDTH = window.innerWidth;
             CONFIG.HEIGHT = window.innerHeight;
         }
@@ -269,7 +346,7 @@
             snowflakes = [];
             for (let i = 0; i < CONFIG.SNOW_COUNT; i++) {
                 // Random position in big volume
-                const range = 2000;
+                const range = 4000; // Wider snow for zoomed out view
                 snowflakes.push({
                     x: (Math.random() - 0.5) * range,
                     y: (Math.random() - 0.5) * range, // Start anywhere vertically
@@ -284,8 +361,8 @@
 
         function initSnowFloor() {
             snowFloor = [];
-            const floorY = 900; // Position below hearts
-            const radius = 2000; // Floor size
+            const floorY = 1200; // Lower floor
+            const radius = 4000; // Bigger floor
 
             for (let i = 0; i < CONFIG.SNOW_FLOOR_COUNT; i++) {
                 // Random point in circle
@@ -312,10 +389,13 @@
                 const proj = project(r.x, r.y, r.z);
 
                 if (proj) {
-                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, p.size * proj.scale, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.globalAlpha = p.alpha;
+
+                    // Render Image Sprite
+                    const drawSize = p.size * proj.scale * 6;
+                    ctx.drawImage(snowImage, proj.x - drawSize / 2, proj.y - drawSize / 2, drawSize, drawSize);
+
+                    ctx.globalAlpha = 1.0;
                 }
             }
         }
@@ -342,7 +422,7 @@
                     const z3d = pos2D.x * Math.sin(angleOffset);
 
                     // Random start position (scattered)
-                    const range = 2000;
+                    const range = 4000; // Wider scatter
                     const startX = (Math.random() - 0.5) * range;
                     const startY = (Math.random() - 0.5) * range;
                     const startZ = (Math.random() - 0.5) * range;
@@ -391,7 +471,7 @@
 
         function project(x, y, z) {
             // Use projection directly from transformed coords
-            const zOffset = 1000;
+            const zOffset = camZ; // Use Global Zoom
             const contextZ = z + zOffset;
             if (contextZ <= 0) return null;
             const scale = CONFIG.FOCAL_LENGTH / contextZ;
@@ -424,6 +504,7 @@
             // Render Steps
             drawBackground();
             updateAndDrawSnow(now);
+            drawShapeParticles(now); // Draw New Shape
             drawSnowFloor();
             updateAndDrawParticles(now, ease);
             drawCenterGlow();
