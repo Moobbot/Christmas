@@ -478,12 +478,16 @@
             }
         }
 
-        function drawShapeParticles(now) {
+        function drawShapeParticles(now, ease) {
+            // Fade out as hearts assemble (ease 0 -> 1)
+            const globalAlpha = Math.max(0, 1 - ease);
+            if (globalAlpha <= 0) return;
+
             for (let i = 0; i < shapeParticles.length; i++) {
                 const p = shapeParticles[i];
 
                 // Twinkle
-                const alpha = 0.5 + 0.5 * Math.sin(now * 0.003 + p.phase);
+                const alpha = (0.5 + 0.5 * Math.sin(now * 0.003 + p.phase)) * globalAlpha;
 
                 // Rotate
                 const r = applyCamera(p.x, p.y, p.z);
@@ -700,8 +704,9 @@
             // Render Steps
             drawBackground();
             updateAndDrawSnow(now);
-            drawShapeParticles(now); // Draw New Shape
-            drawAccumulatedSnow(now); // Draw Accumulated Snow
+            updateAndDrawSnow(now);
+            drawShapeParticles(now, ease); // Draw New Shape (Fade out with ease)
+            // drawAccumulatedSnow(now); // Draw Accumulated Snow (Disabled "The Disk")
             updateAndDrawGalaxyFloor(now); // Galaxy Floor
             updateAndDrawParticles(now, ease);
             drawCenterGlow();
@@ -768,22 +773,22 @@
             }
         }
 
-        function drawAccumulatedSnow(now) {
-            for (let i = 0; i < accumulatedSnow.length; i++) {
-                const p = accumulatedSnow[i];
+        // function drawAccumulatedSnow(now) {
+        //     for (let i = 0; i < accumulatedSnow.length; i++) {
+        //         const p = accumulatedSnow[i];
 
-                // Apply Camera
-                const r = applyCamera(p.x, p.y, p.z);
-                const proj = project(r.x, r.y, r.z);
+        //         // Apply Camera
+        //         const r = applyCamera(p.x, p.y, p.z);
+        //         const proj = project(r.x, r.y, r.z);
 
-                if (proj) {
-                    ctx.fillStyle = p.color + p.alpha + ')';
-                    // Draw as simple rect for performance
-                    const s = p.size * proj.scale;
-                    ctx.fillRect(proj.x - s / 2, proj.y - s / 2, s, s);
-                }
-            }
-        }
+        //         if (proj) {
+        //             ctx.fillStyle = p.color + p.alpha + ')';
+        //             // Draw as simple rect for performance
+        //             const s = p.size * proj.scale;
+        //             ctx.fillRect(proj.x - s / 2, proj.y - s / 2, s, s);
+        //         }
+        //     }
+        // }
 
         function updateAndDrawParticles(now, ease) {
             // Galaxy Flow Effect: Spiral Rotation
