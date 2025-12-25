@@ -24,16 +24,56 @@
 
         #debug {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            pointer-events: none;
-            text-shadow: 1px 1px 2px #000;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-family: monospace;
             z-index: 10;
+        }
+
+        /* Image Container (Centered, floating) */
+        #image-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: none;
+            /* Let mouse pass through to canvas for coords */
+        }
+
+        #displayed-image {
+            max-width: 400px;
+            max-height: 400px;
+            border: 5px solid #fff;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.8);
+            border-radius: 15px;
+
+            /* Hidden state */
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            /* Bouncy pop */
+        }
+
+        /* Visible state class */
+        #displayed-image.visible {
+            opacity: 1;
+            transform: scale(1);
         }
     </style>
 </head>
 <body>
     <div id="debug">FPS: 60<br>Mode: 6 Intersecting Planes</div>
+
+    <!-- Image Container -->
+    <div id="image-container">
+        <img id="displayed-image" src="" alt="Christmas Memory">
+    </div>
+
     <script>
         // --- CONFIGURATION ---
         const CONFIG = {
@@ -42,18 +82,28 @@
             PARTICLES: 12000, // Số lượng hạt
             HEART_COUNT: 6,   // 6 trái tim
             HEART_SIZE: 15,   // Kích thước
-            SNOW_COUNT: 800,  // Số lượng tuyết (Increased)
+            SNOW_COUNT: 800,  // Số lượng tuyết
+            SNOW_FLOOR_COUNT: 1000,
             FPS_UPDATE_INTERVAL: 500,
             FOCAL_LENGTH: 800
         };
+
+        const IMAGES = [
+            '../images/img_1.jpg',
+            '../images/img_2.jpg',
+            '../images/img_3.jpg'
+        ];
 
         // --- STATE ---
         let canvas, ctx;
         let particles = [];
         let snowflakes = []; // Array for snow
+        let snowFloor = []; // Floor particles
         let startTime = 0;
         let lastTime = 0;
         let camAngleY = 0; // Góc quay camera toàn cảnh
+
+        let isHovering = false; // Track hover state
 
         // Màu cho 6 trái tim để dễ phân biệt (hoặc dùng 1 màu nếu thích)
         const PALETTE = [
@@ -74,8 +124,36 @@
             window.addEventListener('resize', resize);
             resize();
 
+            // Hover Interaction (MouseMove)
+            window.addEventListener('mousemove', (e) => {
+                const cx = window.innerWidth / 2;
+                const cy = window.innerHeight / 2;
+                const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+
+                const img = document.getElementById('displayed-image');
+
+                // Radius of sensitivity
+                if (dist < 100) {
+                    if (!isHovering) {
+                        // Enter Hover
+                        isHovering = true;
+                        // Pick random image only on new enter
+                        const randIndex = Math.floor(Math.random() * IMAGES.length);
+                        img.src = IMAGES[randIndex];
+                        img.classList.add('visible');
+                    }
+                } else {
+                    if (isHovering) {
+                        // Leave Hover
+                        isHovering = false;
+                        img.classList.remove('visible');
+                    }
+                }
+            });
+
             initParticles();
             initSnow(); // Init snow
+            initSnowFloor(); // Init Floor
             requestAnimationFrame(loop);
         }
 
@@ -108,10 +186,49 @@
                     x: (Math.random() - 0.5) * range,
                     y: (Math.random() - 0.5) * range, // Start anywhere vertically
                     z: (Math.random() - 0.5) * range,
-                    vy: 1 + Math.random() * 2, // Falling speed
+                    // FASTER Falling Speed
+                    vy: 4 + Math.random() * 4,
                     size: Math.random() * 2 + 1,
                     phase: Math.random() * Math.PI * 2
                 });
+            }
+        }
+
+        function initSnowFloor() {
+            snowFloor = [];
+            const floorY = 900; // Position below hearts
+            const radius = 2000; // Floor size
+
+            for (let i = 0; i < CONFIG.SNOW_FLOOR_COUNT; i++) {
+                // Random point in circle
+                const r = radius * Math.sqrt(Math.random());
+                const theta = Math.random() * 2 * Math.PI;
+
+                snowFloor.push({
+                    x: r * Math.cos(theta),
+                    y: floorY, // Flat floor
+                    z: r * Math.sin(theta),
+                    size: Math.random() * 2 + 1,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawSnowFloor() {
+            for (let i = 0; i < snowFloor.length; i++) {
+                const p = snowFloor[i];
+
+                // Rotate
+                const r = rotateY(p.x, p.y, p.z, camAngleY);
+                // Project
+                const proj = project(r.x, r.y, r.z);
+
+                if (proj) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, p.size * proj.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
@@ -181,37 +298,40 @@
         // --- LOOP ---
         function loop(now) {
             requestAnimationFrame(loop);
-            if (startTime === 0) startTime = now; // Initialize startTime on first frame
+            if (startTime === 0) startTime = now;
             const dt = (now - lastTime) / 1000;
             lastTime = now;
 
-            // Xoay camera tự động để nhìn thấy khối 3D
+            // Update Global State
             camAngleY += 0.005;
 
-            // Clear màn hình (hiệu ứng đuôi mờ)
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = 'rgba(5, 5, 16, 0.2)';
-            ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
-
-            ctx.globalCompositeOperation = 'lighter';
-
-            // Animation Progress (Convergence)
-            // 0 -> 7000ms: Converge (Slower)
+            // Calculate Animation Progress
             const convergeDuration = 7000;
             let progress = (now - startTime) / convergeDuration;
             if (progress > 1) progress = 1;
-
-            // "Chầm chậm rồi nhanh dần" -> Ease In
-            // Reduced power to 2.5 to make the end slightly less abrupt than 3
             const ease = Math.pow(progress, 2.5);
 
-            // 1. Vẽ Tuyết (Background)
+            // Render Steps
+            drawBackground();
+            updateAndDrawSnow(now);
+            drawSnowFloor();
+            updateAndDrawParticles(now, ease);
+            drawCenterGlow();
+        }
+
+        function drawBackground() {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(5, 5, 16, 0.2)';
+            ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+            ctx.globalCompositeOperation = 'lighter';
+        }
+
+        function updateAndDrawSnow(now) {
             for (let i = 0; i < snowflakes.length; i++) {
                 const s = snowflakes[i];
 
                 // Falling
                 s.y += s.vy;
-                // Wind?
                 s.x += Math.sin(now * 0.001 + s.phase) * 0.5;
 
                 // Reset
@@ -234,8 +354,9 @@
                     ctx.fill();
                 }
             }
+        }
 
-            // 2. Vẽ Hạt Trái Tim
+        function updateAndDrawParticles(now, ease) {
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
 
@@ -263,14 +384,14 @@
 
                     ctx.fillStyle = p.color + alphaBase + ')';
                     ctx.beginPath();
-                    // Vẽ hình tròn nhỏ thay vì hình vuông cho mượt
                     ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
+        }
 
-            // Vẽ tâm điểm sáng rực
-            const centerProj = project(0, 0, 0); // Tâm không đổi, chỉ scale
+        function drawCenterGlow() {
+            const centerProj = project(0, 0, 0);
             if (centerProj) {
                 // Glow tâm
                 const grad = ctx.createRadialGradient(centerProj.x, centerProj.y, 0, centerProj.x, centerProj.y, 30 * centerProj.scale);
